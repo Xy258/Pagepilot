@@ -1,0 +1,5 @@
+{
+  "name": "PagePilot Workspace",
+  "description": "Professional website production and management platform with AI-powered workflow.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"]
+}
