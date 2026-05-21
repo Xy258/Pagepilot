@@ -149,7 +149,7 @@ app.use((req, res, next) => {
 
 // MongoDB Connection
 const LOCAL_URI = 'mongodb://127.0.0.1:27017/artisan-workshop';
-const ATLAS_URI = 'mongodb+srv://ullasmahesh21_db_user:6Amns8FjGvoT3Fld@artisan-workshop.azydkb8.mongodb.net/artisan-workshop?retryWrites=true&w=majority';
+const ATLAS_URI = 'mongodb://ullasmahesh21_db_user:6Amns8FjGvoT3Fld@ac-fw9iegd-shard-00-02.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-00.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-01.azydkb8.mongodb.net:27017/artisan-workshop?ssl=true&authSource=admin&replicaSet=atlas-7o49gd-shard-0';
 const MONGODB_URI = process.env.MONGODB_URI || ATLAS_URI;
 
 mongoose.connect(MONGODB_URI)
