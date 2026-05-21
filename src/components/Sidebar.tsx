@@ -27,8 +27,22 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const { profile } = useAuth();
   const role = profile?.role || 'author';
 
+  const installedPlugins = profile?.plugins || [];
+  
+  const pluginItems: any = [];
+  if (installedPlugins.includes('analytics-pro')) {
+    pluginItems.push({ name: 'Analytics Pro', path: '/plugin/analytics-pro', icon: LayoutDashboard, roles: ['admin', 'editor'], color: 'text-sky-500' });
+  }
+  if (installedPlugins.includes('newsletter-forge')) {
+    pluginItems.push({ name: 'Newsletters', path: '/plugin/newsletter-forge', icon: FileText, roles: ['admin', 'editor', 'author'], color: 'text-orange-500' });
+  }
+  if (installedPlugins.includes('social-connect')) {
+    pluginItems.push({ name: 'Social Connect', path: '/plugin/social-connect', icon: Users, roles: ['admin', 'editor'], color: 'text-pink-400' });
+  }
+
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'editor', 'author', 'viewer'], color: 'text-blue-500' },
+    ...pluginItems,
     { name: 'Pages & Themes', path: '/builder', icon: Layout, roles: ['admin', 'editor'], color: 'text-amber-500' },
     { name: 'Site Projects', path: '/designs', icon: Shapes, roles: ['admin', 'editor'], color: 'text-indigo-500' },
     { name: 'Content & Articles', path: '/content', icon: FileText, roles: ['admin', 'editor', 'author'], color: 'text-emerald-500' },

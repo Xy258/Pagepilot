@@ -65,7 +65,7 @@ function ImageCarousel({ images }: { images: string[] }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain p-1 drop-shadow-sm"
           referrerPolicy="no-referrer"
         />
       </AnimatePresence>
@@ -614,7 +614,7 @@ export default function Ecommerce() {
                           <td className="px-8 py-4 relative">
                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 overflow-hidden shrink-0 group-hover:shadow-md group-hover:shadow-emerald-500/20 group-hover:border-emerald-200 dark:group-hover:border-emerald-800 transition-all duration-300">
+                              <div className="w-14 h-14 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 overflow-hidden shrink-0 group-hover:shadow-md group-hover:shadow-emerald-500/20 group-hover:border-emerald-200 dark:group-hover:border-emerald-800 transition-all duration-300">
                                 <ImageCarousel images={p.images} />
                               </div>
                               <div>
@@ -660,15 +660,15 @@ export default function Ecommerce() {
                             <div className="flex items-center justify-end gap-2">
                               <button 
                                 onClick={() => handleSimulateBuy(p)}
-                                disabled={p.stock <= 0}
+                                disabled={p.stock <= 0 || p.status !== 'active'}
                                 className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
-                                  p.stock > 0 
+                                  p.stock > 0 && p.status === 'active'
                                   ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border-emerald-100 hover:shadow-lg hover:shadow-emerald-500/20 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40' 
                                   : 'text-stone-400 bg-stone-50 dark:bg-stone-800 border-stone-100 dark:border-stone-700 cursor-not-allowed italic'
                                 }`}
                               >
                                 <ShoppingBag size={14} />
-                                {p.stock > 0 ? 'Buy' : 'Not Available'}
+                                {p.status !== 'active' ? 'Disabled' : p.stock > 0 ? 'Buy' : 'Not Available'}
                               </button>
                               <div className="w-px h-6 bg-stone-100 dark:bg-stone-800 mx-1" />
                               <button 

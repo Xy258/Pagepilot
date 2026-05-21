@@ -43,7 +43,9 @@ import {
   History,
   Activity,
   Terminal,
-  Clock
+  Clock,
+  Sparkles,
+  Bot
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,7 +53,7 @@ import { useTheme } from '../contexts/ThemeContext';
 
 export default function Settings() {
   const { profile, user, logout, refreshProfile } = useAuth(); // Assume we might need to refresh profile or logout
-  const { theme: appTheme, toggleTheme } = useTheme();
+  const { theme: appTheme, toggleTheme, palette, setPalette } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -61,7 +63,7 @@ export default function Settings() {
   const [siteName, setSiteName] = useState('Artisan Workshop');
   const [siteDescription, setSiteDescription] = useState('');
   const [languages, setLanguages] = useState(['English', 'French']);
-  const [theme, setTheme] = useState('Natural');
+  const [theme, setTheme] = useState(palette || 'Natural');
   const [timezone, setTimezone] = useState('UTC');
   const [primaryColor, setPrimaryColor] = useState('#10b981');
   const [accentColor, setAccentColor] = useState('#064e3b');
@@ -680,7 +682,10 @@ export default function Settings() {
                   {['Natural', 'Obsidian', 'Snow', 'Midnight'].map((t) => (
                     <button 
                       key={t}
-                      onClick={() => setTheme(t)}
+                      onClick={() => {
+                        setTheme(t);
+                        setPalette(t as any);
+                      }}
                       className={`p-6 rounded-[2.5rem] border transition-all text-center space-y-3 ${
                         theme === t ? 'border-stone-900 dark:border-stone-100 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 shadow-xl' : 'border-stone-100 dark:border-stone-800 bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:border-stone-200 dark:hover:border-stone-700'
                       }`}
@@ -707,12 +712,13 @@ export default function Settings() {
                         <button
                           key={p}
                           onClick={() => setAiProvider(p)}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
                             aiProvider === p 
                               ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 shadow-lg' 
                               : 'text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-200'
                           }`}
                         >
+                          {p === 'gemini' ? <Sparkles size={12} /> : p === 'openai' ? <Bot size={12} /> : <Cpu size={12} />}
                           {p}
                         </button>
                       ))}
@@ -745,9 +751,9 @@ export default function Settings() {
                     <p className="text-xs text-stone-400 mb-8 max-w-[200px]">Secure multi-provider AI core is active and healthy on the backend.</p>
                     
                     <div className="flex -space-x-3">
-                        <div className="w-10 h-10 rounded-xl border-[3px] border-stone-950 dark:border-stone-900 flex items-center justify-center text-[10px] font-bold bg-emerald-500 text-white" title="Gemini Active">G</div>
-                        <div className="w-10 h-10 rounded-xl border-[3px] border-stone-950 dark:border-stone-900 flex items-center justify-center text-[10px] font-bold bg-blue-500 text-white" title="OpenAI Ready">O</div>
-                        <div className="w-10 h-10 rounded-xl border-[3px] border-stone-950 dark:border-stone-900 flex items-center justify-center text-[10px] font-bold bg-purple-500 text-white" title="Groq Ready">G</div>
+                        <div className="w-10 h-10 rounded-xl border-[3px] border-stone-950 dark:border-stone-900 flex items-center justify-center bg-emerald-500 text-white" title="Gemini Active"><Sparkles size={16} /></div>
+                        <div className="w-10 h-10 rounded-xl border-[3px] border-stone-950 dark:border-stone-900 flex items-center justify-center bg-blue-500 text-white" title="OpenAI Ready"><Bot size={16} /></div>
+                        <div className="w-10 h-10 rounded-xl border-[3px] border-stone-950 dark:border-stone-900 flex items-center justify-center bg-purple-500 text-white" title="Groq Ready"><Cpu size={16} /></div>
                     </div>
                   </div>
                   <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 blur-[80px] -mr-12 -mt-12 rounded-full group-hover:scale-150 transition-transform duration-1000"></div>
@@ -764,14 +770,6 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="p-10 border border-stone-200 dark:border-stone-800 rounded-[2.5rem] space-y-6 transition-colors">
-                <p className="text-[10px] font-bold text-stone-400 dark:text-stone-600 uppercase tracking-widest px-1">Update Workshop Key</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input type="password" placeholder="New Password" className="bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl px-5 py-4 text-sm focus:outline-none dark:text-white transition-colors" />
-                  <input type="password" placeholder="Confirm New Password" className="bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-2xl px-5 py-4 text-sm focus:outline-none dark:text-white transition-colors" />
-                </div>
-                <button className="bg-stone-900 dark:bg-emerald-600 text-white px-8 py-3.5 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-stone-800 dark:hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/10">Record New Key</button>
-              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="p-8 bg-stone-100 dark:bg-stone-800 rounded-[2.5rem] border border-stone-200 dark:border-stone-700 flex flex-col justify-between gap-6 transition-colors">
@@ -1075,11 +1073,11 @@ export default function Settings() {
                           <div className="flex md:flex-col items-center md:items-end gap-3 md:gap-1 pl-12 md:pl-0">
                             <div className="flex items-center gap-1.5 text-[10px] font-black text-stone-900 dark:text-stone-300 uppercase tracking-widest">
                               <User size={10} className="text-emerald-500" />
-                              {log.adminEmail}
+                              {log.adminName || log.adminEmail || 'Admin'}
                             </div>
                             <div className="flex items-center gap-1.5 text-[9px] font-bold text-stone-400 uppercase tracking-widest">
                               <Clock size={10} />
-                              {new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                              {log.createdAt ? new Date(log.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Unknown Date'}
                             </div>
                           </div>
                         </div>

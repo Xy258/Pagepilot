@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Plugins from './pages/Plugins';
+import PluginApp from './pages/PluginApp';
 import Users from './pages/Users';
 import SiteBuilder from './pages/SiteBuilder';
 import MySites from './pages/MySites';
@@ -56,6 +57,7 @@ function AnimatedRoutes() {
           <Route path="/media" element={<ProtectedRoute role={['admin', 'editor', 'author']}><Media /></ProtectedRoute>} />
           <Route path="/ecommerce" element={<ProtectedRoute role={['admin', 'editor']}><Ecommerce /></ProtectedRoute>} />
           <Route path="/plugins" element={<Plugins />} />
+          <Route path="/plugin/:id" element={<PluginApp />} />
           <Route path="/users" element={<ProtectedRoute role={['admin']}><Users /></ProtectedRoute>} />
           <Route path="/settings" element={<Settings />} />
         </Route>

@@ -679,20 +679,48 @@ app.post('/api/feedback', async (req, res) => {
 const adminLogSchema = new mongoose.Schema({
   action: String,
   detail: String,
-  adminId: String
+  adminId: String,
+  adminEmail: String,
+  adminName: String
 }, { timestamps: true });
 
 const AdminLog = mongoose.model('AdminLog', adminLogSchema);
 
 app.get('/api/admin-logs', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const logs = await AdminLog.find({ adminId: uid }).sort({ createdAt: -1 }).limit(100);
-  res.json(logs);
+  try {
+    const logs = await AdminLog.find({}).sort({ createdAt: -1 }).limit(100);
+    const uids = [...new Set(logs.map(l => l.adminId).filter(Boolean))];
+    const users = await User.find({ firebaseUid: { $in: uids } });
+    
+    const userMap = {};
+    users.forEach(u => {
+      userMap[u.firebaseUid] = u;
+    });
+
+    const populatedLogs = logs.map(log => {
+      const l = log.toObject();
+      if (!l.adminEmail && l.adminId && userMap[l.adminId]) {
+        l.adminEmail = userMap[l.adminId].email;
+        l.adminName = userMap[l.adminId].displayName;
+      }
+      return l;
+    });
+
+    res.json(populatedLogs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/admin-logs', async (req, res) => {
   const uid = req.headers['x-user-id'];
-  const log = await AdminLog.create({ ...req.body, adminId: uid });
+  const user = await User.findOne({ firebaseUid: uid });
+  const log = await AdminLog.create({ 
+    ...req.body, 
+    adminId: uid,
+    adminEmail: user ? user.email : 'Unknown',
+    adminName: user ? user.displayName : 'Admin'
+  });
   res.json(log);
 });
 
