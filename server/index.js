@@ -456,6 +456,45 @@ app.delete('/api/posts/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/posts/:id/comments', async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    
+    const newComment = {
+      ...req.body,
+      createdAt: new Date().toISOString()
+    };
+    
+    post.comments = post.comments || [];
+    post.comments.push(newComment);
+    await post.save();
+    
+    res.json(post);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/posts/:id/view', async (req, res) => {
+  try {
+    const post = await Post.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }, { new: true });
+    res.json({ success: true, views: post?.views });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/posts/:id/time', async (req, res) => {
+  try {
+    const { seconds } = req.body;
+    const post = await Post.findByIdAndUpdate(req.params.id, { $inc: { secondsSpent: seconds } }, { new: true });
+    res.json({ success: true, secondsSpent: post?.secondsSpent });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.get('/api/media', async (req, res) => {
   const uid = req.headers['x-user-id'];
   const media = await Media.find({ ownerId: uid }).sort({ createdAt: -1 });

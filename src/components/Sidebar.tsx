@@ -124,7 +124,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           className="flex items-center gap-3.5 px-4 py-3 rounded-xl text-stone-500 hover:text-stone-200 hover:bg-stone-900/50 transition-all font-medium text-[13px]"
         >
           <Shapes size={18} className="text-stone-700" />
-          <span>Live Site</span>
+          <span>Blog</span>
           <ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
         </a>
       </nav>

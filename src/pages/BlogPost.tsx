@@ -313,9 +313,8 @@ export default function BlogPost() {
                 <Logo size={56} className="mx-auto mb-8 opacity-60" animated />
                 <h3 className="text-3xl font-serif font-bold mb-4">Enjoyed this chronicle?</h3>
                 <p className="text-emerald-100/60 mb-10 max-w-sm mx-auto text-sm leading-relaxed">Join our newsletter to receive the latest stories and sustainable design tips directly in your inbox.</p>
-                <div className="flex flex-col sm:flex-row gap-3 max-w-sm mx-auto relative z-10">
-                    <input type="email" placeholder="email@example.com" className="bg-stone-800 dark:bg-stone-900 border border-stone-700 dark:border-stone-800 rounded-2xl px-5 py-4 text-sm focus:outline-none flex-1 font-medium transition-colors" />
-                    <button className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all active:scale-95 uppercase tracking-widest text-xs font-display">Subscribe</button>
+                <div className="flex justify-center gap-3 max-w-sm mx-auto relative z-10">
+                    <Link to="/login" className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all active:scale-95 uppercase tracking-widest text-xs font-display inline-block">Subscribe</Link>
                 </div>
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
                 <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full -translate-x-1/2 translate-y-1/2"></div>
