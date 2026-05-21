@@ -149,7 +149,7 @@ app.use((req, res, next) => {
 
 // MongoDB Connection
 const LOCAL_URI = 'mongodb://127.0.0.1:27017/artisan-workshop';
-const ATLAS_URI = 'mongodb+srv://cms:cms123@content.av9ifeu.mongodb.net/artisan-workshop?retryWrites=true&w=majority';
+const ATLAS_URI = 'mongodb://cms:cms123@ac-cunesza-shard-00-00.av9ifeu.mongodb.net:27017,ac-cunesza-shard-00-01.av9ifeu.mongodb.net:27017,ac-cunesza-shard-00-02.av9ifeu.mongodb.net:27017/artisan-workshop?ssl=true&replicaSet=atlas-cunesza-shard-0&authSource=admin&retryWrites=true&w=majority';
 const MONGODB_URI = process.env.MONGODB_URI || ATLAS_URI;
 
 mongoose.connect(MONGODB_URI)
@@ -575,6 +575,46 @@ const orderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Order = mongoose.model('Order', orderSchema);
+
+// Invitations
+const invitationSchema = new mongoose.Schema({
+  email: { type: String, required: true },
+  role: { type: String, default: 'author' },
+  siteName: { type: String },
+  token: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  status: { type: String, default: 'pending' }
+}, { timestamps: true });
+
+const Invitation = mongoose.model('Invitation', invitationSchema);
+
+// Invitation endpoint
+app.post('/api/invitations', async (req, res) => {
+  try {
+    const { email, role = 'author', siteName = '' } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const token = randomBytes(16).toString('hex');
+    const invitation = await Invitation.create({ email, role, siteName, token });
+    // Send email if transporter is configured
+    if (transporter) {
+      const inviteLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/signup?token=${token}&role=${role}`;
+      const mailOptions = {
+        from: process.env.SMTP_USER || 'no-reply@artisan.workshop',
+        to: email,
+        subject: `You're invited to join ${siteName || 'Artisan Workshop'}`,
+        text: `Hello!\n\nYou've been invited to join ${siteName || 'Artisan Workshop'} as a ${role}. Please click the link below to accept the invitation:\n${inviteLink}\n\nIf you didn't expect this, you can ignore this email.`
+      };
+      transporter.sendMail(mailOptions, (err, info) => {
+        if (err) console.error('Invitation email send error:', err);
+        else console.log('Invitation email sent:', info.messageId);
+      });
+    }
+    res.json({ success: true, invitationId: invitation._id, token });
+  } catch (err) {
+    console.error('Invitation creation error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/orders', async (req, res) => {
   const uid = req.headers['x-user-id'];
