@@ -56,9 +56,9 @@ async function analyzeImageVision(base64Data, mimeType, prompt) {
 
   if (serverAi) {
     const visionModels = [
-      'gemini-3.1-flash-image-preview',
-      'gemini-3-pro-image-preview',
-      'gemini-2.5-flash-image'
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
     ];
 
     for (const model of visionModels) {
@@ -148,11 +148,24 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/artisan-workshop';
+const LOCAL_URI = 'mongodb://127.0.0.1:27017/artisan-workshop';
+const ATLAS_URI = 'mongodb+srv://cms:cms123@content.av9ifeu.mongodb.net/artisan-workshop?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI || ATLAS_URI;
 
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+  .then(() => console.log(`✅ Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Local'})`))
+  .catch(async err => {
+    console.error(`❌ Primary MongoDB Connection Error: ${err.message}`);
+    if (MONGODB_URI !== LOCAL_URI) {
+      console.log('🔄 Attempting fallback to local MongoDB...');
+      try {
+        await mongoose.connect(LOCAL_URI);
+        console.log('✅ Connected to MongoDB (Local Fallback)');
+      } catch (fallbackErr) {
+        console.error('❌ Local Fallback MongoDB Connection Error:', fallbackErr.message);
+      }
+    }
+  });
 
 // Email Transporter - robust init with Ethereal fallback for local development
 let transporter = null;
@@ -402,6 +415,21 @@ app.get('/api/posts', async (req, res) => {
   res.json(await posts);
 });
 
+app.get('/api/posts/:slug', async (req, res) => {
+  try {
+    let post = await Post.findOne({ slug: req.params.slug });
+    if (!post && req.params.slug.match(/^[0-9a-fA-F]{24}$/)) {
+      post = await Post.findById(req.params.slug);
+    }
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    res.json(post);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/posts', async (req, res) => {
   try {
     const uid = req.headers['x-user-id'];
@@ -442,7 +470,8 @@ app.post('/api/media', async (req, res) => {
     if (payload.url && payload.url.startsWith('data:')) {
       const matches = payload.url.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
       if (matches && matches.length === 3) {
-        const ext = matches[1].split('/')[1] || 'bin';
+        let ext = matches[1].split('/')[1] || 'bin';
+        if (ext === 'mpeg' || ext === 'mpga') ext = 'mp3';
         const buffer = Buffer.from(matches[2], 'base64');
         const filename = `${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
         const filepath = join(uploadDir, filename);

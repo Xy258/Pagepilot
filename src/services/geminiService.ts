@@ -495,7 +495,7 @@ export const geminiService = {
    */
   async generateMusic(prompt: string): Promise<string> {
     const fallbackAudio = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(prompt.substring(0, 200))}&tl=en&client=tw-ob`;
-    const apiKey = (import.meta as any).env.VITE_VIDEO_AUDIO_API_KEY || (import.meta as any).env.VITE_ELEVENLABS_API_KEY || '';
+    const apiKey = (import.meta as any).env.VITE_ELEVENLABS_API_KEY || (import.meta as any).env.VITE_VIDEO_AUDIO_API_KEY || '';
     
     if (!apiKey) {
       console.warn('ElevenLabs API key not configured. Using fallback TTS.');
@@ -503,9 +503,8 @@ export const geminiService = {
     }
 
     try {
-      console.log("Calling ElevenLabs API for speech generation...");
-      const voiceId = "ErXwobaYiN019PkySvjV";
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      console.log("Calling ElevenLabs API for sound generation...");
+      const response = await fetch(`https://api.elevenlabs.io/v1/sound-generation`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -514,11 +513,7 @@ export const geminiService = {
         },
         body: JSON.stringify({
           text: prompt.substring(0, 500), // Limit text to avoid quota issues
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75
-          }
+          duration_seconds: 5 // Optional standard duration
         })
       });
       if (!response.ok) {

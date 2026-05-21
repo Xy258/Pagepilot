@@ -140,6 +140,7 @@ export const api = {
     list: async () => request('/users'),
     update: async (id: string, data: any) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: async (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
+    invite: async (data: any) => request('/invitations', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   sites: {

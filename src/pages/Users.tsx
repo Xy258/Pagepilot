@@ -91,9 +91,7 @@ export default function Users() {
   const fetchUsers = async () => {
     try {
       const data = await api.users.list();
-      const founders = ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'];
-      const filtered = data ? data.filter((u: any) => u.email && founders.includes(u.email)) : [];
-      setUsers(filtered);
+      setUsers(data || []);
     } catch (err) {
       console.error('Failed to fetch users:', err);
     } finally {
@@ -225,8 +223,7 @@ export default function Users() {
     if (!inviteEmail.trim()) return;
     setIsInviting(true);
     try {
-      // Logic for invitation, maybe just a notification or a special user type
-      console.log('Invite logic:', inviteEmail, inviteRole);
+      await api.users.invite({ email: inviteEmail, role: inviteRole, siteName: 'Artisan Workshop' });
       
       // Record admin activity
       await api.adminLogs.record(
@@ -234,11 +231,28 @@ export default function Users() {
         `Sent invitation to ${inviteEmail} with role ${inviteRole}`
       );
 
+      if (profile) {
+        notificationService.createNotification({
+          userId: profile.uid || profile._id,
+          title: 'Invitation Sent',
+          message: `Successfully dispatched an invitation to ${inviteEmail}.`,
+          type: 'success'
+        });
+      }
+
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('author');
     } catch (error) {
       console.error('Invite failed:', error);
+      if (profile) {
+        notificationService.createNotification({
+          userId: profile.uid || profile._id,
+          title: 'Invitation Failed',
+          message: `Could not send invitation to ${inviteEmail}.`,
+          type: 'error'
+        });
+      }
     } finally {
       setIsInviting(false);
     }

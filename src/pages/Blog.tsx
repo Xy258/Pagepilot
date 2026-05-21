@@ -106,7 +106,7 @@ export default function Blog() {
                     </div>
                   </header>
                   <p className="text-stone-500 dark:text-stone-400 leading-relaxed text-lg font-sans line-clamp-3">
-                    {posts[0].excerpt || (posts[0].content && posts[0].content.substring(0, 180) + '...')}
+                    {posts[0].excerpt || (posts[0].content && posts[0].content.replace(/<[^>]+>/g, '').substring(0, 180) + '...')}
                   </p>
                   <Link 
                     to={`/blog/${posts[0].slug}`}
@@ -146,8 +146,8 @@ export default function Blog() {
                     <h2 className="text-2xl font-serif font-bold text-stone-900 dark:text-white mb-4 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors tracking-tight leading-tight">
                       {post.title}
                     </h2>
-                    <p className="text-stone-500 dark:text-stone-400 leading-relaxed line-clamp-2 mb-6 text-sm font-sans">
-                      {post.excerpt || (post.content && post.content.substring(0, 140) + '...')}
+                    <p className="text-stone-500 dark:text-stone-400 leading-relaxed text-sm font-sans line-clamp-2">
+                      {post.excerpt || (post.content && post.content.replace(/<[^>]+>/g, '').substring(0, 120) + '...')}
                     </p>
                     <div className="flex items-center justify-between pt-6 border-t border-stone-100 dark:border-stone-900 transition-colors">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest">

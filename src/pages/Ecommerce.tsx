@@ -155,6 +155,8 @@ export default function Ecommerce() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [productToDelete, setProductToDelete] = useState<any | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -372,6 +374,33 @@ export default function Ecommerce() {
     }
   };
 
+  const handlePurgeAll = async () => {
+    setIsPurging(true);
+    try {
+      if (tab === 'products') {
+        await api.products.clearAll();
+        fetchProducts();
+      } else {
+        await api.orders.clearAll();
+        fetchOrders();
+      }
+      if (profile) {
+        notificationService.createNotification({
+          userId: profile.uid || profile._id,
+          title: 'Sanitization Complete',
+          message: `All ${tab} have been successfully purged from the laboratory records.`,
+          type: 'success'
+        });
+      }
+      setShowPurgeModal(false);
+      setShowFilterMenu(false);
+    } catch (err) {
+      console.error('Purge failed:', err);
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   const handleStatusUpdate = async (productId: string, newStatus: string) => {
     try {
       await api.products.update(productId, { status: newStatus });
@@ -511,27 +540,8 @@ export default function Ecommerce() {
                     {profile?.role === 'admin' && (
                       <div className="pt-4 border-t border-stone-100 dark:border-stone-800">
                         <button 
-                          onClick={async () => {
-                            if (window.confirm(`Are you absolutely sure you want to PURGE ALL ${tab.toUpperCase()}? This action is irreversible and will wipe the entire collection.`)) {
-                              try {
-                                if (tab === 'products') {
-                                  await api.products.clearAll();
-                                  fetchProducts();
-                                } else {
-                                  await api.orders.clearAll();
-                                  fetchOrders();
-                                }
-                                notificationService.createNotification({
-                                  userId: profile?.uid || profile?._id,
-                                  title: 'Sanitization Complete',
-                                  message: `All ${tab} have been successfully purged from the laboratory records.`,
-                                  type: 'success'
-                                });
-                                setShowFilterMenu(false);
-                              } catch (err) {
-                                console.error('Purge failed:', err);
-                              }
-                            }
+                          onClick={() => {
+                            setShowPurgeModal(true);
                           }}
                           className="w-full py-2 flex items-center justify-center gap-2 text-[10px] font-black text-rose-400 hover:text-rose-600 uppercase tracking-widest text-center border-t border-dashed border-stone-100 dark:border-stone-800 pt-4"
                         >
@@ -600,25 +610,26 @@ export default function Ecommerce() {
                           </td>
                         </tr>
                       ) : filteredProducts.map((p) => (
-                        <tr key={p._id || p.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-800/50 group transition-colors">
-                          <td className="px-8 py-4">
+                        <tr key={p._id || p.id} className="group transition-all duration-300 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 relative">
+                          <td className="px-8 py-4 relative">
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 overflow-hidden shrink-0">
+                              <div className="w-12 h-12 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 overflow-hidden shrink-0 group-hover:shadow-md group-hover:shadow-emerald-500/20 group-hover:border-emerald-200 dark:group-hover:border-emerald-800 transition-all duration-300">
                                 <ImageCarousel images={p.images} />
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-stone-900 dark:text-white tracking-tight">{p.name}</p>
+                                <p className="text-sm font-bold text-stone-900 dark:text-white tracking-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{p.name}</p>
                                 <p className="text-[10px] text-stone-400 dark:text-stone-500 font-bold uppercase tracking-widest">ID: {(p._id || p.id).substring(0, 8)}</p>
                               </div>
                             </div>
                           </td>
                           <td className="px-8 py-4">
                             <div className="flex items-center gap-2.5">
-                              <div className={`p-1.5 rounded-lg border shadow-sm ${
-                                p.category === 'Home' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                p.category === 'Personal Care' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                p.category === 'Kitchen' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                'bg-purple-50 text-purple-600 border-purple-100'
+                              <div className={`p-1.5 rounded-lg border shadow-sm group-hover:scale-110 transition-transform duration-300 ${
+                                p.category === 'Home' ? 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/20 dark:border-amber-900/30' :
+                                p.category === 'Personal Care' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-900/30' :
+                                p.category === 'Kitchen' ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-900/30' :
+                                'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:border-purple-900/30'
                               }`}>
                                 <Package size={14} />
                               </div>
@@ -652,7 +663,7 @@ export default function Ecommerce() {
                                 disabled={p.stock <= 0}
                                 className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
                                   p.stock > 0 
-                                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border-emerald-100 hover:shadow-lg hover:shadow-emerald-500/20' 
+                                  ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border-emerald-100 hover:shadow-lg hover:shadow-emerald-500/20 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40' 
                                   : 'text-stone-400 bg-stone-50 dark:bg-stone-800 border-stone-100 dark:border-stone-700 cursor-not-allowed italic'
                                 }`}
                               >
@@ -1053,6 +1064,57 @@ export default function Ecommerce() {
                 </button>
                 <button
                   onClick={() => setShowDeleteModal(false)}
+                  className="px-6 bg-stone-100 text-stone-500 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-stone-200 transition-all font-display"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPurgeModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPurgeModal(false)}
+              className="absolute inset-0 bg-stone-950/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-8"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <AlertTriangle size={28} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-stone-900">Purge All {tab === 'products' ? 'Products' : 'Orders'}</h3>
+                  <p className="text-xs text-stone-400 font-bold uppercase tracking-widest">Catastrophic Action</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-stone-600 leading-relaxed mb-8">
+                Are you absolutely sure you want to purge all <span className="font-bold text-stone-900">{tab}</span>? 
+                This action is irreversible and will wipe the entire collection permanently from the database.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handlePurgeAll}
+                  disabled={isPurging}
+                  className="flex-1 bg-rose-600 text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isPurging ? <Loader2 size={16} className="animate-spin mx-auto" /> : `Confirm Purge`}
+                </button>
+                <button
+                  onClick={() => setShowPurgeModal(false)}
                   className="px-6 bg-stone-100 text-stone-500 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-stone-200 transition-all font-display"
                 >
                   Cancel

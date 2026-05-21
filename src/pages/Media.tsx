@@ -26,7 +26,11 @@ import {
   Tag,
   ChevronRight,
   Maximize2,
-  PanelRight
+  PanelRight,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../lib/api';
@@ -82,6 +86,8 @@ const getTrackFromPrompt = (prompt: string) => {
 
 export default function Media() {
   const { user } = useAuth();
+
+  // General State Declarations
   const [items, setItems] = useState<MediaItem[]>([]);
   const [activeTab, setActiveTab] = useState<'library' | 'discovery' | 'ai-studio'>('library');
   const [filter, setFilter] = useState('all');
@@ -102,6 +108,132 @@ export default function Media() {
   const [generationStatus, setGenerationStatus] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const [externalPreview, setExternalPreview] = useState<string | null>(null);
+
+  // Custom Video/Audio Player States & Refs
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const videoContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsMuted(false);
+    
+    // Sync initial audio/video volume and mute on change
+    if (selectedItem && selectedItem.type === 'video') {
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.volume = volume;
+          videoRef.current.muted = !!selectedItem.audioUrl;
+        }
+        if (audioRef.current) {
+          audioRef.current.volume = volume;
+          audioRef.current.muted = isMuted;
+        }
+      }, 100);
+    }
+  }, [selectedItem]);
+
+  const togglePlay = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!videoRef.current) return;
+
+    if (isPlaying) {
+      videoRef.current.pause();
+      if (audioRef.current) audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      // In modern browsers, playing both audio and video elements inside this direct user gesture click handler
+      // completely bypasses the browser's autoplay block policy and ensures they play perfectly in sync!
+      videoRef.current.play().catch(err => console.error("Video play failed:", err));
+      if (audioRef.current) {
+        audioRef.current.currentTime = videoRef.current.currentTime;
+        audioRef.current.play().catch(err => console.error("Audio play failed:", err));
+      }
+      setIsPlaying(true);
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const seekTime = parseFloat(e.target.value);
+    setCurrentTime(seekTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = seekTime;
+    }
+    if (audioRef.current) {
+      audioRef.current.currentTime = seekTime;
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vol = parseFloat(e.target.value);
+    setVolume(vol);
+    const newMuted = vol === 0;
+    setIsMuted(newMuted);
+
+    if (videoRef.current) {
+      videoRef.current.volume = vol;
+      videoRef.current.muted = selectedItem?.audioUrl ? true : newMuted;
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = vol;
+      audioRef.current.muted = newMuted;
+    }
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+
+    if (videoRef.current) {
+      videoRef.current.muted = selectedItem?.audioUrl ? true : newMuted;
+    }
+    if (audioRef.current) {
+      audioRef.current.muted = newMuted;
+    }
+  };
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!videoContainerRef.current) return;
+
+    if (!document.fullscreenElement) {
+      videoContainerRef.current.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(err => {
+        console.error("Fullscreen error:", err);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const formatTime = (timeInSeconds: number) => {
+    if (isNaN(timeInSeconds) || !isFinite(timeInSeconds)) return '0:00';
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     if (generatedImg) {
@@ -462,8 +594,7 @@ export default function Media() {
         date: new Date().toISOString().split('T')[0],
         icon: 'Sparkles',
         color: '#6366F1',
-        description: s.description,
-        tags: ['AI Generated', 'Concept']
+        description: s.description
       }));
       
       setItems([...newItems, ...items]);
@@ -673,8 +804,8 @@ export default function Media() {
     try {
       let url = selectedItem.url;
       
-      // If the URL is external (doesn't start with data:), use a proxy to avoid CORS
-      if (url.startsWith('http')) {
+      // If the URL is external (doesn't start with data:) and not localhost, use a proxy to avoid CORS
+      if (url.startsWith('http') && !url.includes('localhost')) {
         url = `https://images.weserv.nl/?url=${encodeURIComponent(url)}&nrb=1`;
       }
         
@@ -1370,37 +1501,119 @@ export default function Media() {
                 <div className={`transition-all duration-500 w-full h-full flex items-center justify-center ${activeFilter}`}>
                   {selectedItem.url ? (
                     selectedItem.type === 'video' ? (
-                      <div className="relative w-full h-full flex items-center justify-center">
+                      <div 
+                        ref={videoContainerRef}
+                        className="relative group w-full h-full flex items-center justify-center rounded-3xl overflow-hidden shadow-2xl bg-black"
+                        onClick={() => togglePlay()}
+                      >
                         <video 
+                          ref={videoRef}
                           src={selectedItem.url} 
-                          controls 
-                          className="max-w-full max-h-full rounded-3xl shadow-2xl focus:outline-none z-10"
-                          onPlay={(e) => {
-                            const audio = e.currentTarget.parentElement?.querySelector('audio');
-                            if (audio) {
-                              audio.currentTime = e.currentTarget.currentTime;
-                              audio.play().catch(() => {});
+                          className="max-w-full max-h-full rounded-3xl object-contain cursor-pointer"
+                          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                          onEnded={() => {
+                            setIsPlaying(false);
+                            setCurrentTime(0);
+                            if (audioRef.current) {
+                              audioRef.current.pause();
+                              audioRef.current.currentTime = 0;
                             }
                           }}
-                          onPause={(e) => {
-                            const audio = e.currentTarget.parentElement?.querySelector('audio');
-                            if (audio) audio.pause();
-                          }}
-                          onSeeked={(e) => {
-                            const audio = e.currentTarget.parentElement?.querySelector('audio');
-                            if (audio) audio.currentTime = e.currentTarget.currentTime;
-                          }}
-                          onVolumeChange={(e) => {
-                             const audio = e.currentTarget.parentElement?.querySelector('audio');
-                             if (audio) {
-                               audio.volume = e.currentTarget.volume;
-                               audio.muted = e.currentTarget.muted;
-                             }
-                          }}
+                          playsInline
                         />
                         {selectedItem.audioUrl && (
-                          <audio src={selectedItem.audioUrl} className="hidden" />
+                          <audio 
+                            ref={audioRef}
+                            src={selectedItem.audioUrl} 
+                            preload="auto"
+                            className="hidden" 
+                          />
                         )}
+
+                        {/* Large Centered Play/Pause Button Overlay */}
+                        <div className={`absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity duration-300 z-10 ${isPlaying ? 'opacity-0 group-hover:opacity-100' : 'opacity-100 bg-black/40'}`}>
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => togglePlay(e)}
+                            className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center text-white shadow-xl hover:bg-emerald-500 hover:border-emerald-400 hover:text-white transition-all duration-300"
+                          >
+                            {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} className="ml-1" fill="currentColor" />}
+                          </motion.button>
+                        </div>
+
+                        {/* Custom Bottom Control Bar */}
+                        <div 
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-stone-950 via-stone-950/65 to-transparent transition-all duration-300 z-20 flex flex-col gap-3 ${isPlaying ? 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0' : 'opacity-100 translate-y-0'}`}
+                        >
+                          {/* Timeline Slider */}
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="range"
+                              min={0}
+                              max={duration || 100}
+                              step={0.05}
+                              value={currentTime}
+                              onChange={handleSeek}
+                              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-emerald-500 bg-white/20 hover:bg-white/30 transition-colors"
+                              style={{
+                                background: `linear-gradient(to right, #10b981 0%, #10b981 ${(currentTime / (duration || 1)) * 100}%, rgba(255, 255, 255, 0.2) ${(currentTime / (duration || 1)) * 100}%, rgba(255, 255, 255, 0.2) 100%)`
+                              }}
+                            />
+                          </div>
+
+                          {/* Control Controls Row */}
+                          <div className="flex items-center justify-between text-white select-none">
+                            <div className="flex items-center gap-4">
+                              {/* Small Play/Pause Toggle */}
+                              <button 
+                                onClick={(e) => togglePlay(e)} 
+                                className="text-white hover:text-emerald-400 transition-colors active:scale-95 duration-200"
+                              >
+                                {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+                              </button>
+
+                              {/* Time Display */}
+                              <span className="text-[11px] font-mono text-stone-200/90 font-bold uppercase tracking-wider">
+                                {formatTime(currentTime)} <span className="text-stone-500 font-normal">/</span> {formatTime(duration)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              {/* Volume Controls */}
+                              <div className="flex items-center gap-2 group/volume relative">
+                                <button 
+                                  onClick={(e) => toggleMute(e)} 
+                                  className="text-white hover:text-emerald-400 transition-colors active:scale-95 duration-200"
+                                >
+                                  {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                                </button>
+                                <input 
+                                  type="range"
+                                  min={0}
+                                  max={1}
+                                  step={0.05}
+                                  value={isMuted ? 0 : volume}
+                                  onChange={handleVolumeChange}
+                                  className="w-16 h-1 rounded-lg appearance-none cursor-pointer accent-emerald-500 bg-white/25 hover:bg-white/40 transition-colors md:block hidden"
+                                  style={{
+                                    background: `linear-gradient(to right, #10b981 0%, #10b981 ${(isMuted ? 0 : volume) * 100}%, rgba(255, 255, 255, 0.2) ${(isMuted ? 0 : volume) * 100}%, rgba(255, 255, 255, 0.2) 100%)`
+                                  }}
+                                />
+                              </div>
+
+                              {/* Fullscreen Button */}
+                              <button 
+                                onClick={(e) => toggleFullscreen(e)} 
+                                className="text-white hover:text-emerald-400 transition-colors active:scale-95 duration-200"
+                              >
+                                <Maximize2 size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ) : selectedItem.type === 'audio' ? (
                       <div className="flex flex-col items-center gap-8 w-full max-w-md">
