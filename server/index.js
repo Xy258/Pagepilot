@@ -15,7 +15,7 @@ import { Groq } from 'groq-sdk';
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env.local') });
 
 const app = express();
-const PORT = process.env.BACKEND_PORT || 5000;
+const PORT = process.env.PORT || process.env.BACKEND_PORT || 5000;
 
 const serverGeminiApiKeys = [
   process.env.VITE_GEMINI_API_KEY,
