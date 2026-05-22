@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -25,11 +25,15 @@ const safeFormatDistanceToNow = (date: any) => {
 
 export default function BlogPost() {
   const { slug } = useParams();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
+  const navigate = useNavigate();
   const [post, setPost] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
 
   const fetchPost = async () => {
     try {
@@ -101,10 +105,35 @@ export default function BlogPost() {
       setNewComment('');
       fetchPost(); // Refresh post to get new comments
     } catch (err) {
-      console.error('Error adding comment:', err);
-      alert('Failed to post comment.');
+      console.error('Failed to post comment:', err);
+      alert('Failed to post comment. Please try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitReply = async (e: React.FormEvent, commentId: string) => {
+    e.preventDefault();
+    if (!profile || !user || !replyContent.trim()) return;
+
+    setIsSubmittingReply(true);
+    try {
+      const replyData = {
+        authorId: user.uid,
+        authorName: profile.displayName || profile.email?.split('@')[0],
+        authorAvatar: profile.avatarUrl || profile.photoURL,
+        content: replyContent.trim(),
+      };
+
+      const updatedPost = await api.posts.addReply(post._id || post.id, commentId, replyData);
+      setPost(updatedPost);
+      setReplyingTo(null);
+      setReplyContent('');
+    } catch (err) {
+      console.error('Failed to post reply:', err);
+      alert('Failed to post reply. Please try again.');
+    } finally {
+      setIsSubmittingReply(false);
     }
   };
 
@@ -173,7 +202,7 @@ export default function BlogPost() {
               </div>
               <div className="text-left font-sans">
                 <p className="text-[10px] font-black text-stone-300 dark:text-stone-700 uppercase tracking-widest leading-none mb-1 transition-colors">Written by</p>
-                <p className="text-base font-black text-stone-900 dark:text-stone-100 leading-none transition-colors">Page Pilot Team</p>
+                <p className="text-base font-black text-stone-900 dark:text-stone-100 leading-none transition-colors">{post.authorName || 'Page Pilot Team'}</p>
               </div>
             </div>
             <div className="hidden md:block w-px h-8 bg-stone-100 dark:bg-stone-900"></div>
@@ -185,12 +214,23 @@ export default function BlogPost() {
             </div>
             <div className="hidden md:block w-px h-8 bg-stone-100 dark:bg-stone-900"></div>
             <div className="flex gap-2">
-              <button className="w-11 h-11 rounded-2xl bg-white dark:bg-stone-900 text-stone-400 hover:text-emerald-600 hover:border-emerald-200 dark:hover:border-emerald-800 transition-all active:scale-95 flex items-center justify-center border border-stone-100 dark:border-stone-800 shadow-sm">
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  alert('Link copied to clipboard!');
+                }}
+                className="w-11 h-11 rounded-2xl bg-white dark:bg-stone-900 text-stone-400 hover:text-emerald-600 hover:border-emerald-200 dark:hover:border-emerald-800 transition-all active:scale-95 flex items-center justify-center border border-stone-100 dark:border-stone-800 shadow-sm"
+              >
                 <Share2 size={18} />
               </button>
-              <button className="w-11 h-11 rounded-2xl bg-white dark:bg-stone-900 text-stone-400 hover:text-emerald-600 hover:border-emerald-200 dark:hover:border-emerald-800 transition-all active:scale-95 flex items-center justify-center border border-stone-100 dark:border-stone-800 shadow-sm">
-                <BarChart2 size={18} />
-              </button>
+              {user && post.authorId === user.uid && (
+                <button 
+                  onClick={() => navigate('/dashboard/posts')}
+                  className="w-11 h-11 rounded-2xl bg-white dark:bg-stone-900 text-stone-400 hover:text-emerald-600 hover:border-emerald-200 dark:hover:border-emerald-800 transition-all active:scale-95 flex items-center justify-center border border-stone-100 dark:border-stone-800 shadow-sm"
+                >
+                  <BarChart2 size={18} />
+                </button>
+              )}
             </div>
           </div>
         </motion.header>
@@ -292,6 +332,67 @@ export default function BlogPost() {
                     <div className="text-[15px] text-stone-600 dark:text-stone-400 leading-relaxed bg-white dark:bg-stone-900 p-5 rounded-[1.5rem] rounded-tl-none border border-stone-100 dark:border-stone-800 shadow-sm font-medium transition-colors">
                       {comment.content}
                     </div>
+                    {profile && (
+                      <button 
+                        onClick={() => { setReplyingTo(replyingTo === (comment._id || i) ? null : (comment._id || i)); setReplyContent(''); }}
+                        className="mt-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest hover:opacity-80 transition-opacity"
+                      >
+                        Reply
+                      </button>
+                    )}
+
+                    <AnimatePresence>
+                      {replyingTo === (comment._id || i) && (
+                        <motion.form 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          onSubmit={(e) => handleSubmitReply(e, comment._id || i)} 
+                          className="mt-4"
+                        >
+                          <div className="flex gap-3">
+                            <input 
+                              type="text" 
+                              value={replyContent}
+                              onChange={(e) => setReplyContent(e.target.value)}
+                              placeholder="Write a reply..."
+                              className="flex-1 bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-stone-900 dark:text-white"
+                            />
+                            <button 
+                              disabled={isSubmittingReply || !replyContent.trim()}
+                              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 transition-opacity"
+                            >
+                              {isSubmittingReply ? '...' : 'Reply'}
+                            </button>
+                          </div>
+                        </motion.form>
+                      )}
+                    </AnimatePresence>
+
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div className="mt-6 space-y-4 border-l-2 border-stone-100 dark:border-stone-800 pl-6">
+                        {comment.replies.map((reply: any, ri: number) => (
+                          <div key={reply._id || ri} className="flex gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-stone-900 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-100/50 dark:border-stone-800 overflow-hidden">
+                              {reply.authorAvatar ? (
+                                <img src={reply.authorAvatar} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                              ) : (
+                                <User size={14} />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                 <h4 className="text-xs font-bold text-stone-900 dark:text-white font-display">{reply.authorName}</h4>
+                                 <span className="text-[9px] font-bold text-stone-400 dark:text-stone-600 uppercase tracking-widest">{safeFormatDistanceToNow(reply.createdAt)}</span>
+                              </div>
+                              <div className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed bg-white dark:bg-stone-900 p-4 rounded-2xl rounded-tl-none border border-stone-100 dark:border-stone-800 shadow-sm font-medium">
+                                {reply.content}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}

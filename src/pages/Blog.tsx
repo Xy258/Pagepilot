@@ -105,9 +105,9 @@ export default function Blog() {
                        <span className="flex items-center gap-2"><User size={12} /> Editor Choice</span>
                     </div>
                   </header>
-                  <p className="text-stone-500 dark:text-stone-400 leading-relaxed text-lg font-sans line-clamp-3">
-                    {posts[0].excerpt || (posts[0].content && posts[0].content.replace(/<[^>]+>/g, '').substring(0, 180) + '...')}
-                  </p>
+                  <div className="text-stone-500 dark:text-stone-400 leading-relaxed text-lg font-sans line-clamp-3 rich-text-content"
+                    dangerouslySetInnerHTML={{ __html: posts[0].excerpt || posts[0].content }} 
+                  />
                   <Link 
                     to={`/blog/${posts[0].slug}`}
                     className="inline-flex items-center gap-4 text-stone-900 dark:text-white font-bold border-b-2 border-emerald-500 dark:border-emerald-700 pb-1 hover:pb-2 transition-all group/link"
@@ -146,13 +146,15 @@ export default function Blog() {
                     <h2 className="text-2xl font-serif font-bold text-stone-900 dark:text-white mb-4 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors tracking-tight leading-tight">
                       {post.title}
                     </h2>
-                    <p className="text-stone-500 dark:text-stone-400 leading-relaxed text-sm font-sans line-clamp-2">
-                      {post.excerpt || (post.content && post.content.replace(/<[^>]+>/g, '').substring(0, 120) + '...')}
-                    </p>
+                    <div className="text-stone-500 dark:text-stone-400 leading-relaxed text-sm font-sans line-clamp-2 rich-text-content"
+                      dangerouslySetInnerHTML={{ __html: post.excerpt || post.content }} 
+                    />
                     <div className="flex items-center justify-between pt-6 border-t border-stone-100 dark:border-stone-900 transition-colors">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest">
-                        <span className="w-4 h-4 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-300 dark:text-stone-700 font-display transition-colors"><User size={10} /></span>
-                        {post.authorId?.substring(0, 8) || 'Staff'}
+                        <span className="w-5 h-5 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-300 dark:text-stone-700 font-display transition-colors overflow-hidden">
+                          {post.authorPhotoURL ? <img src={post.authorPhotoURL} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : <User size={10} />}
+                        </span>
+                        {post.authorName || post.authorId?.substring(0, 8) || 'Staff'}
                       </div>
                       <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Read More</span>
                     </div>

@@ -51,6 +51,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import ReactQuill from 'react-quill-new';
 import { geminiService } from '../services/geminiService';
+import { marked } from 'marked';
 
 const AI_TONES = [
   { id: 'professional', label: 'Professional' },
@@ -399,7 +400,9 @@ export default function ContentEditor() {
       const systemInstruction = `You are a world-class content strategist and professional copywriter with expertise in ${aiTone} delivery. Your goal is to create impactful, SEO-optimized blog content that deeply resonates with a ${aiAudience} audience. Use professional HTML tags for formatting.`;
 
       const generated = await geminiService.generateContent(prompt, systemInstruction);
-      setContent(generated);
+      const htmlContent = await marked.parse(generated);
+      
+      setContent(htmlContent);
       setShowAiGeneratorModal(false);
       notificationService.createNotification({
         userId: user?.uid || '',
@@ -445,8 +448,10 @@ export default function ContentEditor() {
     try {
       const toneToUse = forcedTone || aiTone;
       const rewritten = await geminiService.rewriteText(selectedText, toneToUse);
+      const htmlRewritten = await marked.parse(rewritten);
+      
       quill.deleteText(range.index, range.length);
-      quill.insertText(range.index, rewritten);
+      quill.clipboard.dangerouslyPasteHTML(range.index, htmlRewritten);
       
       // Update state since direct Quill calls might not trigger onChange immediately
       setContent(quill.root.innerHTML);

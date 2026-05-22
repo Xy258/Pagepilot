@@ -407,12 +407,30 @@ app.delete('/api/users/:id', async (req, res) => {
 app.get('/api/posts', async (req, res) => {
   const uid = req.headers['x-user-id'];
   const { status, category, limit } = req.query;
-  let query = { authorId: uid };
-  if (status) query.status = status;
+  let query = {};
+  
+  if (status === 'published') {
+    query.status = 'published';
+  } else {
+    query.authorId = uid;
+    if (status) query.status = status;
+  }
   if (category) query.category = category;
-  let posts = Post.find(query).sort({ createdAt: -1 });
-  if (limit) posts = posts.limit(parseInt(limit));
-  res.json(await posts);
+  
+  let posts = await Post.find(query).sort({ createdAt: -1 });
+  if (limit) posts = posts.slice(0, parseInt(limit));
+  
+  // Attach user info
+  const postsWithAuthors = await Promise.all(posts.map(async (p) => {
+    const postObj = p.toObject ? p.toObject() : p;
+    const author = await User.findOne({ uid: postObj.authorId });
+    if (author) {
+      postObj.authorName = author.displayName || author.email?.split('@')[0];
+      postObj.authorPhotoURL = author.avatarUrl || author.photoURL;
+    }
+    return postObj;
+  }));
+  res.json(postsWithAuthors);
 });
 
 app.get('/api/posts/:slug', async (req, res) => {
@@ -424,7 +442,15 @@ app.get('/api/posts/:slug', async (req, res) => {
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
     }
-    res.json(post);
+    
+    const postObj = post.toObject ? post.toObject() : post;
+    const author = await User.findOne({ uid: postObj.authorId });
+    if (author) {
+      postObj.authorName = author.displayName || author.email?.split('@')[0];
+      postObj.authorPhotoURL = author.avatarUrl || author.photoURL;
+    }
+    
+    res.json(postObj);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -462,12 +488,47 @@ app.post('/api/posts/:id/comments', async (req, res) => {
     if (!post) return res.status(404).json({ error: 'Post not found' });
     
     const newComment = {
+      _id: new mongoose.Types.ObjectId().toString(),
       ...req.body,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      replies: []
     };
     
     post.comments = post.comments || [];
     post.comments.push(newComment);
+    
+    // Mongoose mixed array modification
+    post.markModified('comments');
+    await post.save();
+    
+    res.json(post);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/posts/:id/comments/:commentId/reply', async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    
+    const commentIndex = post.comments.findIndex((c, idx) => 
+      c._id === req.params.commentId || 
+      c.id === req.params.commentId || 
+      idx.toString() === req.params.commentId
+    );
+    if (commentIndex === -1) return res.status(404).json({ error: 'Comment not found' });
+    
+    const reply = {
+      _id: new mongoose.Types.ObjectId().toString(),
+      ...req.body,
+      createdAt: new Date().toISOString()
+    };
+    
+    post.comments[commentIndex].replies = post.comments[commentIndex].replies || [];
+    post.comments[commentIndex].replies.push(reply);
+    
+    post.markModified('comments');
     await post.save();
     
     res.json(post);

@@ -75,7 +75,8 @@ export const api = {
     delete: async (id: string) => request(`/posts/${id}`, { method: 'DELETE' }),
     trackView: async (id: string) => request(`/posts/${id}/view`, { method: 'POST' }),
     trackTime: async (id: string, seconds: number) => request(`/posts/${id}/time`, { method: 'POST', body: JSON.stringify({ seconds }) }),
-    addComment: async (id: string, data: any) => request(`/posts/${id}/comments`, { method: 'POST', body: JSON.stringify(data) })
+    addComment: async (id: string, data: any) => request(`/posts/${id}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+    addReply: async (id: string, commentId: string, data: any) => request(`/posts/${id}/comments/${commentId}/reply`, { method: 'POST', body: JSON.stringify(data) })
   },
   
   // Media
