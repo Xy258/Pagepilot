@@ -110,6 +110,7 @@ export default function Media() {
   const [generationStatus, setGenerationStatus] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const [externalPreview, setExternalPreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Custom Video/Audio Player States & Refs
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -927,8 +928,48 @@ export default function Media() {
     }
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const fakeEvent = { target: { files: e.dataTransfer.files } } as any;
+      handleUpload(fakeEvent);
+    }
+  };
+
   return (
-    <div className="space-y-8 pb-12 transition-colors duration-300">
+    <div 
+      className="space-y-8 pb-12 transition-colors duration-300 relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/80 backdrop-blur-sm border-4 border-dashed border-emerald-500 m-4 rounded-[3rem]"
+          >
+            <div className="text-center pointer-events-none">
+              <Upload size={64} className="text-emerald-500 mx-auto mb-4 animate-bounce" />
+              <h2 className="text-4xl font-serif font-black text-white">Drop Artifacts to Enshrine</h2>
+              <p className="text-stone-300 mt-2 text-sm uppercase tracking-widest">Images • Video • Audio • Manuscripts</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex flex-col xl:flex-row xl:items-center flex-wrap justify-between gap-6 bg-white dark:bg-stone-900 p-8 rounded-[2.5rem] border border-stone-100 dark:border-stone-800 shadow-sm transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-center gap-8">
            <div>
