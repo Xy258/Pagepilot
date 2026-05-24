@@ -65,7 +65,7 @@ const AI_TONES = [
 export default function ContentEditor() {
   const { profile, user } = useAuth();
   const role = profile?.role || 'author';
-  const isAdminOrEditor = role === 'admin' || role === 'editor';
+  const isAdminOrEditor = profile?.role === 'admin' || profile?.role === 'editor' || profile?.role === 'author';
   
   const [posts, setPosts] = useState<any[]>([]);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -571,14 +571,24 @@ export default function ContentEditor() {
       const base64Image = await geminiService.generateImage(fullPrompt);
       setGeneratedImage(base64Image);
       
-      const res = await fetch(base64Image);
-      const blob = await res.blob();
-      const file = new File([blob], `ai-gen-${Date.now()}.png`, { type: 'image/png' });
-
-      const uploadedMedia = await api.media.upload(file);
+      let finalUrl = base64Image;
+      if (base64Image.startsWith('data:')) {
+        const res = await fetch(base64Image);
+        const blob = await res.blob();
+        const file = new File([blob], `ai-gen-${Date.now()}.png`, { type: 'image/png' });
+        const uploadedMedia = await api.media.upload(file);
+        finalUrl = uploadedMedia.url;
+      }
       
       if (selectedPost) {
-        setFeaturedImage(uploadedMedia.url);
+        setFeaturedImage(finalUrl);
+      }
+
+      if (quillRef.current) {
+        const quill = quillRef.current.getEditor();
+        const range = quill.getSelection(true) || { index: quill.getLength() };
+        quill.insertEmbed(range.index, 'image', finalUrl);
+        quill.setSelection(range.index + 1, 0);
       }
       
       fetchMedia();
@@ -967,7 +977,7 @@ export default function ContentEditor() {
                     </h1>
                     <div className="flex items-center gap-4 text-stone-400 dark:text-stone-500 text-sm">
                        <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 overflow-hidden">
-                         {profile?.photoURL ? <img src={profile.photoURL} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : null}
+                         {(profile?.avatarUrl || profile?.photoURL) ? <img src={profile.avatarUrl || profile.photoURL} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : null}
                        </div>
                        <span className="font-medium">By {profile?.displayName || user?.email?.split('@')[0] || 'Writer'}</span>
                        <span className="w-1 h-1 bg-stone-200 dark:bg-stone-800 rounded-full"></span>
@@ -1251,7 +1261,7 @@ export default function ContentEditor() {
                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute bottom-full right-0 mb-3 w-64 bg-white border border-stone-200 rounded-2xl shadow-xl p-4 z-50"
+                          className="absolute top-full right-0 mt-3 w-64 bg-white border border-stone-200 rounded-2xl shadow-xl p-4 z-50"
                         >
                           <div className="text-center">
                             <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1274,7 +1284,7 @@ export default function ContentEditor() {
                               </button>
                             </div>
                           </div>
-                          <div className="absolute top-full right-8 -mt-px w-3 h-3 bg-white border-r border-b border-stone-200 rotate-45" />
+                          <div className="absolute bottom-full right-8 -mb-px w-3 h-3 bg-white border-l border-t border-stone-200 rotate-45" />
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -1442,6 +1452,7 @@ export default function ContentEditor() {
                      <div className="relative">
                       <button 
                         onClick={() => setShowToneDropdown(!showToneDropdown)}
+                        onMouseDown={(e) => e.preventDefault()}
                         disabled={aiLoading || !content}
                         className={`p-2 rounded-lg flex items-center justify-center transition-all group shrink-0 ${showToneDropdown ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 shadow-sm' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'}`}
                         title="Rewrite Selected Section with AI (Choose Tone)"
@@ -1471,6 +1482,7 @@ export default function ContentEditor() {
                                     setShowToneDropdown(false);
                                     handleRewriteSection(tone.id);
                                   }}
+                                  onMouseDown={(e) => e.preventDefault()}
                                   className={`w-full px-4 py-2 text-left text-[11px] font-bold flex items-center justify-between uppercase tracking-wider transition-colors ${aiTone === tone.id ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400' : 'text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white'}`}
                                 >
                                   {tone.label}
@@ -1587,7 +1599,7 @@ export default function ContentEditor() {
                         className="flex flex-col items-center justify-center gap-2 p-4 bg-stone-50 border border-stone-100 rounded-2xl hover:border-amber-500 hover:bg-white transition-all group disabled:opacity-50"
                       >
                         <PanelRight size={18} className="text-amber-600 group-hover:scale-110 transition-transform" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-stone-500">Excerpt</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-stone-500">Summary</span>
                       </button>
                       <button 
                         onClick={() => {
@@ -1608,6 +1620,27 @@ export default function ContentEditor() {
                           value={slug}
                           onChange={(e) => setSlug(e.target.value)}
                           className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs text-stone-600 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                           <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Meta Tag</label>
+                           <button onClick={handleSEO} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Generate with AI">
+                             <Sparkles size={14} />
+                           </button>
+                        </div>
+                        <input 
+                          value={seoTitle}
+                          onChange={(e) => setSeoTitle(e.target.value)}
+                          placeholder="Title"
+                          className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs text-stone-600 focus:outline-none mb-2"
+                        />
+                        <textarea 
+                          value={seoDescription}
+                          onChange={(e) => setSeoDescription(e.target.value)}
+                          placeholder="Description"
+                          className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs text-stone-600 focus:outline-none min-h-[60px]"
                         />
                       </div>
                       
@@ -1687,8 +1720,10 @@ export default function ContentEditor() {
 
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                           <label className="text-[10px] font-bold text-stone-400 uppercase">Excerpt</label>
-                           <button onClick={handleSummarize} className="text-[10px] text-emerald-600 font-bold hover:underline">Use AI Summary</button>
+                           <label className="text-[10px] font-bold text-stone-400 uppercase">Summary</label>
+                           <button onClick={handleSummarize} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Generate Summary">
+                             <Sparkles size={14} />
+                           </button>
                         </div>
                         <textarea 
                           value={excerpt}
@@ -1699,32 +1734,7 @@ export default function ContentEditor() {
                    </div>
                 </div>
 
-                <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-6">
-                   <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-xs font-bold text-stone-400 uppercase tracking-widest">SEO Settings</h4>
-                      <button onClick={handleSEO} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors">
-                        <Wand2 size={14} />
-                      </button>
-                   </div>
-                   <div className="space-y-4">
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-400 uppercase mb-2 block">Meta Title</label>
-                        <input 
-                          value={seoTitle}
-                          onChange={(e) => setSeoTitle(e.target.value)}
-                          className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs text-stone-600 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-stone-400 uppercase mb-2 block">Meta Description</label>
-                        <textarea 
-                          value={seoDescription}
-                          onChange={(e) => setSeoDescription(e.target.value)}
-                          className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs text-stone-600 focus:outline-none min-h-[80px]"
-                        />
-                      </div>
-                   </div>
-                </div>
+
               </div>
             </div>
           </motion.div>

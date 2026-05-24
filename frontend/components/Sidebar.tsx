@@ -47,7 +47,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
     { name: 'Site Projects', path: '/designs', icon: Shapes, roles: ['admin', 'editor'], color: 'text-indigo-500' },
     { name: 'Content & Articles', path: '/content', icon: FileText, roles: ['admin', 'editor', 'author'], color: 'text-emerald-500' },
     { name: 'Media Library', path: '/media', icon: ImageIcon, roles: ['admin', 'editor', 'author'], color: 'text-purple-500' },
-    { name: 'Store Manager', path: '/ecommerce', icon: ShoppingBag, roles: ['admin', 'editor'], color: 'text-rose-500' },
+    { name: 'Store Manager', path: '/ecommerce', icon: ShoppingBag, roles: ['admin'], color: 'text-rose-500' },
     { name: 'User Management', path: '/users', icon: Users, roles: ['admin'], color: 'text-indigo-500' },
     { name: 'Plugins & Add-ons', path: '/plugins', icon: Plug, roles: ['admin', 'editor'], color: 'text-pink-500' },
     { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'editor', 'author'], color: 'text-stone-400' },

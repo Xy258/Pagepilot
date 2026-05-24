@@ -103,6 +103,8 @@ export default function Media() {
   const [aiStyle, setAiStyle] = useState('minimalist');
   const [aiGenType, setAiGenType] = useState<'image' | 'video' | 'audio' | 'ebook'>('image');
   const [generatedImg, setGeneratedImg] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [generatedManuscript, setGeneratedManuscript] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -188,6 +190,25 @@ export default function Media() {
     }
   };
 
+  const handleRename = async () => {
+    if (!selectedItem || !renameValue.trim() || renameValue === selectedItem.name) {
+      setIsRenaming(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.media.update(selectedItem.id, { name: renameValue.trim() });
+      setItems(items.map(i => i.id === selectedItem.id ? { ...i, name: renameValue.trim() } : i));
+      setSelectedItem({ ...selectedItem, name: renameValue.trim() });
+      toast('Artifact Renamed', 'Name updated successfully.', 'success');
+    } catch (err) {
+      toast('Rename Failed', 'Could not update artifact name.', 'error');
+    } finally {
+      setLoading(false);
+      setIsRenaming(false);
+    }
+  };
+
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
     const newMuted = !isMuted;
@@ -241,7 +262,18 @@ export default function Media() {
     }
   }, [generatedImg]);
   const [articles, setArticles] = useState<any[]>([]);
-  const [showArticleLinker, setShowArticleLinker] = useState(false);
+
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        const data = await api.posts.list();
+        setArticles(data.map((p: any) => ({ id: p._id || p.id, title: p.title })));
+      } catch (err) {
+        console.error('Failed to load articles for linker', err);
+      }
+    };
+    fetchArticles();
+  }, []);  const [showArticleLinker, setShowArticleLinker] = useState(false);
   const { toast } = useNotifications();
 
   useEffect(() => {
@@ -897,7 +929,7 @@ export default function Media() {
 
   return (
     <div className="space-y-8 pb-12 transition-colors duration-300">
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white dark:bg-stone-900 p-8 rounded-[2.5rem] border border-stone-100 dark:border-stone-800 shadow-sm transition-colors">
+      <div className="flex flex-col xl:flex-row xl:items-center flex-wrap justify-between gap-6 bg-white dark:bg-stone-900 p-8 rounded-[2.5rem] border border-stone-100 dark:border-stone-800 shadow-sm transition-colors">
         <div className="flex flex-col sm:flex-row sm:items-center gap-8">
            <div>
             <h1 className="text-3xl font-serif font-black text-stone-900 dark:text-white mb-1 tracking-tight">Media Pool</h1>
@@ -1391,7 +1423,6 @@ export default function Media() {
                                 <img
                                   src={generatedImg}
                                   referrerPolicy="no-referrer"
-                                  crossOrigin="anonymous"
                                   className="w-full h-full object-cover animate-in fade-in duration-1000"
                                   alt="Generated"
                                 />
@@ -1673,7 +1704,28 @@ export default function Media() {
                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: selectedItem.color }} />
                        <span className="text-[10px] font-black text-stone-300 dark:text-stone-700 uppercase tracking-[0.2em]">{selectedItem.type} Artifact</span>
                     </div>
-                    <h3 className="text-3xl font-serif font-black text-stone-900 dark:text-white tracking-tight leading-none overflow-hidden text-ellipsis">{selectedItem.name}</h3>
+                    <div className="flex items-center gap-3">
+                      {isRenaming ? (
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="text" 
+                            value={renameValue} 
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+                            className="bg-transparent border-b-2 border-emerald-500 text-3xl font-serif font-black text-stone-900 dark:text-white tracking-tight leading-none outline-none focus:ring-0 px-0 py-1"
+                            autoFocus
+                          />
+                          <button onClick={handleRename} className="text-emerald-500 hover:text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-xl transition-colors">
+                            <Check size={16} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 group/rename cursor-pointer" onClick={() => { setIsRenaming(true); setRenameValue(selectedItem.name); }}>
+                          <h3 className="text-3xl font-serif font-black text-stone-900 dark:text-white tracking-tight leading-none overflow-hidden text-ellipsis">{selectedItem.name}</h3>
+                          <Edit2 size={16} className="text-stone-300 dark:text-stone-600 opacity-0 group-hover/rename:opacity-100 transition-opacity" />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-6 bg-stone-50 dark:bg-stone-950 p-6 rounded-3xl border border-stone-100 dark:border-stone-800 transition-colors shadow-inner">

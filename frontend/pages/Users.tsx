@@ -758,7 +758,7 @@ export default function Users() {
                         <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
                           {isActive ? 'Current Session' : user.lastLogin ? (
                             safeFormatDistanceToNow(user.lastLogin)
-                          ) : 'Never logged in'}
+                          ) : safeFormatDistanceToNow(user.createdAt || new Date())}
                         </span>
                       </div>
                    </div>
@@ -931,7 +931,7 @@ export default function Users() {
                     Joined {user.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'Recently'}
                  </div>
                  <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1 rounded-md uppercase tracking-widest flex items-center gap-1 border border-emerald-100/10 dark:border-emerald-900/10">
-                   {user.lastLogin ? `Last Login: ${safeFormatDistanceToNow(user.lastLogin)}` : 'New User'}
+                   {user.lastLogin ? `Last Login: ${safeFormatDistanceToNow(user.lastLogin)}` : safeFormatDistanceToNow(user.createdAt || new Date())}
                  </span>
               </div>
             </div>

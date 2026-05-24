@@ -237,7 +237,7 @@ export const geminiService = {
   async summarizeContent(text: string) {
     const truncated = text.substring(0, CONTENT_LIMIT);
     return this.generateContent(
-      `Summarize this: \n\n ${truncated}. Provide a concise, engaging 2-3 sentence summary for a blog post teaser. Do not use filler words.`
+      `Summarize this: \n\n ${truncated}. Provide a concise, engaging summary formatted as a structured bulleted list for a blog post teaser.`
     );
   },
 
@@ -289,8 +289,15 @@ export const geminiService = {
       // Primary: Use Pollinations.ai for high-fidelity, unauthenticated AI image synthesis
       console.log("Synthesizing genuine AI image via Pollinations.ai...");
       const seed = Math.floor(Math.random() * 1000000);
-      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
+      const rawUrl = `image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
+      
+      // We wrap the URL in Weserv to bypass any browser CORS or Adblock restrictions
+      // that might cause the canvas to remain blank despite a successful generation.
+      const url = `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&nrb=1`;
       console.log('Generated image source URL:', url);
+      
+      // We return the URL directly without fetching it first to avoid CORS issues
+      // and false positives if the HEAD request fails while the GET succeeds.
       return url;
     } catch (err: any) {
       console.warn('AI Image generation failed on Pollinations. Attempting Gemini/OpenAI fallbacks...', err);

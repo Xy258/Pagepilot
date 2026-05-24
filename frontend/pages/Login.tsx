@@ -208,7 +208,7 @@ export default function Login() {
             <div className="w-20 h-20 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-500 dark:text-emerald-400 mx-auto mb-6">
               <CheckCircle2 size={48} className="animate-bounce" />
             </div>
-            <h2 className="text-3xl font-serif font-bold text-stone-900 dark:text-white mb-2">Welcome Back!</h2>
+            <h2 className="text-3xl font-serif font-bold text-stone-900 dark:text-white mb-2">Welcome!</h2>
             <p className="text-stone-500 dark:text-stone-400 mb-8">Opening your creative suite. This will only take a moment.</p>
             
             <div className="relative w-full h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden mb-4">

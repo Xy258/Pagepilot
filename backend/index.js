@@ -2,17 +2,21 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+dotenv.config();
+if (fs.existsSync('./.env.local')) {
+  dotenv.config({ path: './.env.local', override: true });
+}
 import nodemailer from 'nodemailer';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { OAuth2Client } from 'google-auth-library';
-import fs from 'fs';
 import { randomBytes } from 'crypto';
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import { Groq } from 'groq-sdk';
 
-dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env.local') });
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), './.env.local') });
 
 const app = express();
 const PORT = process.env.PORT || process.env.BACKEND_PORT || 5000;
@@ -296,7 +300,8 @@ const mediaSchema = new mongoose.Schema({
   sizeBytes: Number,
   ownerId: String,
   icon: String,
-  color: String
+  color: String,
+  tags: [String]
 }, { timestamps: true });
 
 const Media = mongoose.model('Media', mediaSchema);
@@ -368,6 +373,13 @@ app.post('/api/auth/google', async (req, res) => {
     let user = await User.findOne({ uid: googleUser.uid });
     if (!user) {
       user = await User.create(googleUser);
+      await Notification.create({
+        userId: user.uid,
+        title: 'Welcome to Artisan Workshop!',
+        message: 'We are thrilled to have you here. Start writing your first masterpiece!',
+        type: 'welcome',
+        read: false
+      });
     }
     return res.json(user);
   } catch (error) {
@@ -384,6 +396,13 @@ app.post('/api/auth/google', async (req, res) => {
     let user = await User.findOne({ uid: mockGoogleUser.uid });
     if (!user) {
       user = await User.create(mockGoogleUser);
+      await Notification.create({
+        userId: user.uid,
+        title: 'Welcome to Artisan Workshop!',
+        message: 'We are thrilled to have you here. Start writing your first masterpiece!',
+        type: 'welcome',
+        read: false
+      });
     }
     return res.json(user);
   }
@@ -469,7 +488,11 @@ app.post('/api/posts', async (req, res) => {
 app.patch('/api/posts/:id', async (req, res) => {
   try {
     const uid = req.headers['x-user-id'];
-    const post = await Post.findOneAndUpdate({ _id: req.params.id, authorId: uid }, req.body, { new: true });
+    const user = await User.findOne({ uid });
+    const query = user?.role === 'admin' ? { _id: req.params.id } : { _id: req.params.id, authorId: uid };
+    
+    const post = await Post.findOneAndUpdate(query, req.body, { new: true });
+    if (!post) return res.status(404).json({ error: 'Post not found or unauthorized' });
     res.json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });

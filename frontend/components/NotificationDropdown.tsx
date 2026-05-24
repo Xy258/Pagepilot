@@ -154,7 +154,7 @@ export default function NotificationDropdown() {
                                    onClick={() => { setIsOpen(false); markAsRead(n._id || n.id || ''); }}
                                    className="inline-flex items-center gap-2 mt-3 text-[9px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-[0.2em] transition-all group-hover:translate-x-1"
                                  >
-                                   Expedite <ExternalLink size={10} />
+                                   View <ExternalLink size={10} />
                                  </Link>
                                )}
                             </div>
