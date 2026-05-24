@@ -1186,9 +1186,20 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 app.use(express.static(join(currentDir, '../dist')));
 
 // The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
+// match one above, send // Serve frontend in production
 app.get('*', (req, res) => {
-  res.sendFile(join(currentDir, '../dist/index.html'));
+  const possiblePaths = [
+    join(currentDir, '../dist/index.html'),
+    join(currentDir, '../frontend/dist/index.html')
+  ];
+  
+  for (const filePath of possiblePaths) {
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+    }
+  }
+  
+  res.status(404).send('Frontend build not found. Please run "npm run build" in the frontend directory first or use the vite dev server.');
 });
 
 // Start Server

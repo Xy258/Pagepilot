@@ -116,7 +116,7 @@ export const api = {
     saveReference: async (data: any) => request('/media', { method: 'POST', body: JSON.stringify(data) }),
     rehost: async (data: { url: string; name?: string }) => request('/proxy-image', { method: 'POST', body: JSON.stringify(data) }),
     analyze: async (data: { url?: string; base64?: string; mimeType?: string; prompt: string }) => request('/vision-tags', { method: 'POST', body: JSON.stringify(data) }),
-    update: async (id: string, data: any) => request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
     delete: async (id: string) => request(`/media/${id}`, { method: 'DELETE' }),
     generateVideo: async (data: { prompt: string, style?: string }) => request('/videos/generate', { method: 'POST', body: JSON.stringify(data) }),
   },
