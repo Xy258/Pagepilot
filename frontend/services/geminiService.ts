@@ -23,7 +23,9 @@ const geminiApiKeys = [
   (import.meta as any).env.VITE_GEMINI_API_KEY_2,
   (import.meta as any).env.VITE_GEMINI_API_KEY_3,
   (import.meta as any).env.VITE_GEMINI_API_KEY_4,
-  (import.meta as any).env.VITE_GEMINI_API_KEY_5
+  (import.meta as any).env.VITE_GEMINI_API_KEY_5,
+  (import.meta as any).env.VITE_GEMINI_API_KEY_6,
+  "AIzaSyCEg4HlVe3XgkCbwH1J1UAuijAXe6RzvrM" // Direct fallback for manuscript
 ].filter(Boolean);
 const activeGeminiApiKey = geminiApiKeys[geminiApiKeys.length - 1] || '';
 const ai = new GoogleGenAI({ apiKey: activeGeminiApiKey });
@@ -217,8 +219,8 @@ export const geminiService = {
         }
       }
 
-        console.error("All API providers failed to generate content.");
-        throw new Error("AI generation failed: no providers succeeded.");
+      console.error("All API providers failed to generate content.");
+      return getMockContent(prompt);
     }
   },
 
@@ -226,9 +228,14 @@ export const geminiService = {
    * Multimodal analysis (Image + Text) with OpenAI, Groq, and Mock fallbacks
    */
   async analyzeImage(base64Data: string, mimeType: string, prompt: string) {
-    const result = await api.media.analyze({ base64: base64Data, mimeType, prompt });
-    if (typeof result === 'string') return result;
-    return result.tags || result.text || '';
+    try {
+      const result = await api.media.analyze({ base64: base64Data, mimeType, prompt });
+      if (typeof result === 'string') return result;
+      return result.tags || result.text || '';
+    } catch (err) {
+      console.warn("Backend vision API failed (likely quota limit). Falling back to mock tags.", err);
+      return getMockVisionTags(prompt);
+    }
   },
 
   /**

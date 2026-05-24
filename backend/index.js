@@ -27,6 +27,7 @@ const serverGeminiApiKeys = [
   process.env.VITE_GEMINI_API_KEY_3,
   process.env.VITE_GEMINI_API_KEY_4,
   process.env.VITE_GEMINI_API_KEY_5,
+  process.env.VITE_GEMINI_API_KEY_6,
   process.env.GEMINI_API_KEY
 ].filter(Boolean);
 const serverGeminiApiKey = serverGeminiApiKeys[serverGeminiApiKeys.length - 1] || '';

@@ -245,20 +245,38 @@ export default function BlogPost() {
           </motion.div>
         )}
 
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-3xl mx-auto quill-container">
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="rich-text-content prose prose-stone dark:prose-invert prose-xl max-w-none 
-              prose-headings:font-serif prose-headings:font-bold prose-headings:tracking-tight
-              prose-p:leading-relaxed prose-p:text-stone-700 dark:prose-p:text-stone-300 prose-p:mb-8
-              prose-blockquote:font-serif prose-blockquote:italic prose-blockquote:text-stone-900 dark:prose-blockquote:text-stone-100 prose-blockquote:border-emerald-500
-              prose-a:text-emerald-600 prose-strong:text-stone-900 dark:prose-strong:text-white
-              prose-img:rounded-[2rem] prose-img:shadow-lg transition-colors duration-300"
+            className="bg-white dark:bg-stone-900 p-6 md:p-10 rounded-[2rem] border border-stone-100 dark:border-stone-800 shadow-sm"
           >
-            <div dangerouslySetInnerHTML={{ __html: post.content }} />
+            <div 
+              className="ql-editor rich-text-content"
+              dangerouslySetInnerHTML={{ __html: post.content }} 
+            />
           </motion.div>
+          <style>{`
+            .quill-container .ql-editor {
+              padding: 0;
+              color: #1c1917;
+              line-height: 1.8;
+              font-size: 1.125rem;
+            }
+            .dark .quill-container .ql-editor {
+              color: #e7e5e4;
+            }
+            .quill-container .ql-editor h1 { font-family: serif; font-size: 2.5rem; font-weight: bold; margin-bottom: 1.5rem; }
+            .quill-container .ql-editor h2 { font-family: serif; font-size: 2rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem; }
+            .quill-container .ql-editor h3 { font-family: serif; font-size: 1.5rem; font-weight: bold; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+            .quill-container .ql-editor p { margin-bottom: 1.25rem; }
+            .quill-container .ql-editor blockquote { border-left: 4px solid #10b981; padding-left: 1.5rem; font-style: italic; color: #57534e; margin: 2rem 0; }
+            .dark .quill-container .ql-editor blockquote { color: #a8a29e; }
+            .quill-container .ql-editor img { border-radius: 2rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+            .quill-container .ql-editor a { color: #059669; text-decoration: underline; text-underline-offset: 2px; }
+            .dark .quill-container .ql-editor a { color: #34d399; }
+          `}</style>
         </div>
 
         {/* Comment Section */}

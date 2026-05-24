@@ -97,6 +97,8 @@ export default function Settings() {
   const [adminFeedback, setAdminFeedback] = useState<any[]>([]);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  
+  const [planToDelete, setPlanToDelete] = useState<number | null>(null);
 
   useEffect(() => {
     if (profile?.role === 'admin' && activeTab === 'audit') {
@@ -307,6 +309,59 @@ export default function Settings() {
       </div>
 
       <div className="flex-1 bg-white dark:bg-stone-900 rounded-[2.5rem] border border-stone-200 dark:border-stone-800 shadow-sm overflow-hidden flex flex-col min-h-[600px] transition-colors duration-300">
+        <AnimatePresence>
+          {planToDelete !== null && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setPlanToDelete(null)}
+                className="absolute inset-0 bg-stone-950/60 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-[2.5rem] shadow-2xl overflow-hidden p-8 border border-stone-100 dark:border-stone-800"
+              >
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                    <Trash2 size={28} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-serif font-bold text-stone-900 dark:text-white">Delete Tier</h3>
+                    <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Permanent Action</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+                    Are you sure you want to remove the <span className="font-bold text-stone-900 dark:text-white">{pricingPlans[planToDelete]?.name || 'selected'}</span> pricing tier?
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setPricingPlans(pricingPlans.filter((_, i) => i !== planToDelete));
+                      setPlanToDelete(null);
+                    }}
+                    className="flex-1 bg-rose-600 text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-900/20 active:scale-95"
+                  >
+                    Confirm Deletion
+                  </button>
+                  <button
+                    onClick={() => setPlanToDelete(null)}
+                    className="px-6 bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-stone-200 dark:hover:bg-stone-700 transition-all font-display"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
         <div className="p-10 flex-1 overflow-y-auto custom-scrollbar">
           {activeTab === 'appearance' && (
             <div className="space-y-12">
@@ -912,19 +967,13 @@ export default function Settings() {
                         }}
                         className="bg-transparent border-none text-[10px] font-black text-stone-400 dark:text-stone-600 uppercase tracking-[0.3em] w-full focus:outline-none transition-colors"
                       />
-                      {pricingPlans.length > 1 && (
-                        <button 
-                          onClick={() => {
-                            if (confirm(`Remove the "${plan.name}" pricing plan?`)) {
-                              setPricingPlans(pricingPlans.filter((_, i) => i !== index));
-                            }
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-stone-300 dark:text-stone-705 hover:text-rose-500 transition-all shrink-0"
-                          title="Remove Plan"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setPlanToDelete(index)}
+                        className="p-1 text-emerald-600 hover:text-rose-500 transition-all shrink-0 cursor-pointer"
+                        title="Remove Plan"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                     <div className="flex items-baseline gap-1">
                       <span className="text-2xl font-serif font-bold text-stone-900 dark:text-white transition-colors">₹</span>
@@ -938,7 +987,18 @@ export default function Settings() {
                         }}
                         className="bg-transparent border-none text-4xl font-serif font-bold text-stone-900 dark:text-white w-full focus:outline-none transition-colors"
                       />
-                      <span className="text-stone-400 dark:text-stone-600 text-xs font-medium transition-colors">/mo</span>
+                      <select 
+                        value={plan.interval || 'month'}
+                        onChange={(e) => {
+                          const newPlans = [...pricingPlans];
+                          newPlans[index].interval = e.target.value;
+                          setPricingPlans(newPlans);
+                        }}
+                        className="bg-transparent border-none text-stone-400 dark:text-stone-600 text-xs font-medium focus:outline-none transition-colors cursor-pointer appearance-none px-1"
+                      >
+                        <option value="month">/mo</option>
+                        <option value="year">/yr</option>
+                      </select>
                     </div>
                   </div>
 
