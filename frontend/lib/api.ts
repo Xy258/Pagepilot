@@ -65,6 +65,14 @@ export const api = {
       return user;
     }
   },
+
+  ai: {
+    generateContent: async (prompt: string, systemInstruction?: string) =>
+      request('/ai/content', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, systemInstruction })
+      })
+  },
   
   // Posts/Articles
   posts: {
@@ -116,6 +124,9 @@ export const api = {
     saveReference: async (data: any) => request('/media', { method: 'POST', body: JSON.stringify(data) }),
     rehost: async (data: { url: string; name?: string }) => request('/proxy-image', { method: 'POST', body: JSON.stringify(data) }),
     analyze: async (data: { url?: string; base64?: string; mimeType?: string; prompt: string }) => request('/vision-tags', { method: 'POST', body: JSON.stringify(data) }),
+    generateImage: async (prompt: string) => request('/media/generate-image', { method: 'POST', body: JSON.stringify({ prompt }) }),
+    generateAudio: async (prompt: string) => request('/audio/generate', { method: 'POST', body: JSON.stringify({ prompt }) }),
+    searchStock: async (query: string, type: string) => request(`/media/stock-search?type=${encodeURIComponent(type)}&query=${encodeURIComponent(query)}`),
 
     delete: async (id: string) => request(`/media/${id}`, { method: 'DELETE' }),
     generateVideo: async (data: { prompt: string, style?: string }) => request('/videos/generate', { method: 'POST', body: JSON.stringify(data) }),

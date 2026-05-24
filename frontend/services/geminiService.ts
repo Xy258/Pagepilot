@@ -9,33 +9,10 @@
  * - Image Generation: High-fidelity visual assets using Imagen-powered Gemini models.
  */
 
-import { GoogleGenAI, Modality } from "@google/genai";
 import { api } from '../lib/api';
-import OpenAI from 'openai';
-import { Groq } from 'groq-sdk';
 
 // Buffer limit to prevent token overflow on large documents
 const CONTENT_LIMIT = 10000; 
-
-// Initializing AI client - framework says to use process.env.GEMINI_API_KEY
-const geminiApiKeys = [
-  (import.meta as any).env.VITE_GEMINI_API_KEY,
-  (import.meta as any).env.VITE_GEMINI_API_KEY_2,
-  (import.meta as any).env.VITE_GEMINI_API_KEY_3,
-  (import.meta as any).env.VITE_GEMINI_API_KEY_4,
-  (import.meta as any).env.VITE_GEMINI_API_KEY_5,
-  (import.meta as any).env.VITE_GEMINI_API_KEY_6,
-  "AIzaSyCEg4HlVe3XgkCbwH1J1UAuijAXe6RzvrM" // Direct fallback for manuscript
-].filter(Boolean);
-const activeGeminiApiKey = geminiApiKeys[geminiApiKeys.length - 1] || '';
-const ai = new GoogleGenAI({ apiKey: activeGeminiApiKey });
-
-// Fallback clients using potentially active keys
-const openaiKey = (import.meta as any).env.VITE_OPENAI_API_KEY || '';
-const groqKey = (import.meta as any).env.VITE_GROQ_API_KEY || '';
-
-const openai = openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null;
-const groq = groqKey ? new Groq({ apiKey: groqKey, dangerouslyAllowBrowser: true }) : null;
 
 // High-quality mock visual tagging generator to guarantee tagging works
 function getMockVisionTags(prompt: string): string {
@@ -153,73 +130,15 @@ export const geminiService = {
    * Universal content generator with OpenAI and Groq fallbacks, plus Mock mode
    */
   async generateContent(prompt: string, systemInstruction?: string) {
-    if (!((import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.VITE_OPENAI_API_KEY || (import.meta as any).env.VITE_GROQ_API_KEY)) {
-      throw new Error('No AI provider API keys configured. Please set VITE_GEMINI_API_KEY, VITE_OPENAI_API_KEY, or VITE_GROQ_API_KEY.');
-    }
     try {
-      // Try multiple models in case one is unavailable
-      const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-      let lastError: any;
-      
-      for (const model of models) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-              systemInstruction: systemInstruction || "You are a helpful assistant."
-            }
-          });
-          if (!response.text) {
-            throw new Error(`Gemini model ${model} returned empty response`);
-          }
-          return response.text || '';
-        } catch (error: any) {
-          console.warn(`Model ${model} failed:`, error?.message);
-          lastError = error;
-          // Only retry on model-not-found type errors
-          if (!error?.message?.includes('not found') && !error?.message?.includes('404') && !error?.message?.includes('is not supported')) {
-            throw error;
-          }
-        }
+      const response = await api.ai.generateContent(prompt, systemInstruction);
+      if (response?.text) {
+        return response.text;
       }
-      throw lastError;
-    } catch (geminiError: any) {
-      console.warn("Gemini generation failed. Attempting OpenAI or Groq fallback...", geminiError);
-
-      if (openai) {
-        try {
-          console.log("Using OpenAI fallback (gpt-4o-mini)...");
-          const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: 'system', content: systemInstruction || "You are a helpful assistant." },
-              { role: 'user', content: prompt }
-            ]
-          });
-          return response.choices[0]?.message?.content || '';
-        } catch (openaiError) {
-          console.error("OpenAI fallback failed:", openaiError);
-        }
-      }
-
-      if (groq) {
-        try {
-          console.log("Using Groq fallback (llama-3.1-8b-instant)...");
-          const response = await groq.chat.completions.create({
-            model: "llama-3.1-8b-instant",
-            messages: [
-              { role: 'system', content: systemInstruction || "You are a helpful assistant." },
-              { role: 'user', content: prompt }
-            ]
-          });
-          return response.choices[0]?.message?.content || '';
-        } catch (groqError) {
-          console.error("Groq fallback failed:", groqError);
-        }
-      }
-
-      console.error("All API providers failed to generate content.");
+      console.warn('AI response did not contain text, falling back to mock content.');
+      return getMockContent(prompt);
+    } catch (error: any) {
+      console.warn('Backend AI content generation failed, falling back to mock content.', error?.message || error);
       return getMockContent(prompt);
     }
   },
@@ -288,69 +207,17 @@ export const geminiService = {
    * Visual asset generator (Native AI Generation)
    */
   async generateImage(prompt: string) {
-    // Ensure at least one image generation provider is configured
-    if (!((import.meta as any).env.VITE_GEMINI_API_KEY || (import.meta as any).env.VITE_OPENAI_API_KEY)) {
-      throw new Error('No image generation API keys configured. Set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY.');
-    }
     try {
-      // Primary: Use Pollinations.ai for high-fidelity, unauthenticated AI image synthesis
-      console.log("Synthesizing genuine AI image via Pollinations.ai...");
+      const response = await api.media.generateImage(prompt);
+      if (response?.url) {
+        return response.url;
+      }
+      throw new Error('Invalid response from image generation service');
+    } catch (error: any) {
+      console.warn('Backend image generation failed, falling back to Pollinations URL.', error?.message || error);
       const seed = Math.floor(Math.random() * 1000000);
       const rawUrl = `image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
-      
-      // We wrap the URL in Weserv to bypass any browser CORS or Adblock restrictions
-      // that might cause the canvas to remain blank despite a successful generation.
-      const url = `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&nrb=1`;
-      console.log('Generated image source URL:', url);
-      
-      // We return the URL directly without fetching it first to avoid CORS issues
-      // and false positives if the HEAD request fails while the GET succeeds.
-      return url;
-    } catch (err: any) {
-      console.warn('AI Image generation failed on Pollinations. Attempting Gemini/OpenAI fallbacks...', err);
-
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-image-preview',
-          contents: {
-            parts: [{ text: prompt }]
-          }
-        });
-
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-          if (part.inlineData) {
-            const base64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-            return await this.applyWatermark(base64);
-          }
-        }
-        throw new Error('No image data returned from Gemini.');
-      } catch (geminiErr) {
-        console.warn('Gemini image generation failed. Attempting OpenAI DALL-E fallback...', geminiErr);
-
-        if (openai) {
-          try {
-            console.log("Using OpenAI DALL-E fallback...");
-            const response = await openai.images.generate({
-              model: "dall-e-3",
-              prompt: prompt,
-              n: 1,
-              size: "1024x1024",
-              response_format: "b64_json"
-            });
-            const b64 = response.data?.[0]?.b64_json;
-            if (!b64) {
-              throw new Error('OpenAI returned malformed image data.');
-            }
-            const base64 = `data:image/png;base64,${b64}`;
-            return await this.applyWatermark(base64);
-          } catch (openaiError) {
-            console.error("OpenAI DALL-E fallback failed:", openaiError);
-          }
-        }
-      }
-      
-      // All providers exhausted
-        throw new Error('Image generation failed across all providers. Verify API keys and network connectivity.');
+      return `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&nrb=1`;
     }
   },
 
@@ -445,63 +312,8 @@ export const geminiService = {
    * Video generation using Veo (specifically using Key 4 and 5 as requested by user)
    */
   async generateVideo(prompt: string) {
-    // Implement rotation between Key 4 and Key 5
-    // Note: In browser, we use process.env mapping or import.meta.env
-    const key4 = (import.meta as any).env.VITE_GEMINI_API_KEY_4;
-    const key5 = (import.meta as any).env.VITE_GEMINI_API_KEY_5;
-    
-    // Simple rotation logic
-    const videoKey = Math.random() > 0.5 ? (key4 || key5) : (key5 || key4);
-    
-    // Priority: Specific Rotation Key -> User Selected Key (API_KEY) -> Primary App Key
-    const finalKey = (import.meta as any).env.VITE_VIDEO_AUDIO_API_KEY || videoKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
-
-    if (!finalKey) {
-      throw new Error('No API key found for video generation. Please select a paid key.');
-    }
-
-    const veoAi = new GoogleGenAI({ apiKey: finalKey });
-    
-    // Request Veo to include a watermark in the actual video generation
-    const watermarkedPrompt = `${prompt}. Add a professional 'PAGE PILOT' text watermark in the bottom corner. Ensure high quality cinematic finish.`;
-
-    try {
-      let operation = await veoAi.models.generateVideos({
-        model: 'veo-3.1-lite-generate-preview',
-        prompt: watermarkedPrompt,
-        config: {
-          numberOfVideos: 1,
-          resolution: '720p',
-          aspectRatio: '16:9'
-        }
-      });
-
-      while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        operation = await veoAi.operations.getVideosOperation({ operation: operation });
-      }
-
-      const uri = operation.response?.generatedVideos?.[0]?.video?.uri;
-      if (!uri) throw new Error('Video generation failed to return a URI');
-
-      // Fetch video bytes using the same key
-      const response = await fetch(uri, {
-        headers: { 'x-goog-api-key': finalKey }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch video artifact: ${response.statusText}`);
-      }
-
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
-    } catch (err: any) {
-      // Better error reporting for billing/quota
-      if (err.message?.includes('billing') || err.message?.includes('403') || err.message?.includes('permission')) {
-        throw new Error('BILLING_REQUIRED: Video generation requires a billing-enabled API key or credits.');
-      }
-      throw err;
-    }
+    const response = await api.media.generateVideo({ prompt });
+    return response;
   },
 
   /**
@@ -509,38 +321,15 @@ export const geminiService = {
    */
   async generateMusic(prompt: string): Promise<string> {
     const fallbackAudio = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(prompt.substring(0, 200))}&tl=en&client=tw-ob`;
-    const apiKey = (import.meta as any).env.VITE_ELEVENLABS_API_KEY || (import.meta as any).env.VITE_VIDEO_AUDIO_API_KEY || '';
-    
-    if (!apiKey) {
-      console.warn('ElevenLabs API key not configured. Using fallback TTS.');
-      return fallbackAudio;
-    }
-
     try {
-      console.log("Calling ElevenLabs API for sound generation...");
-      const response = await fetch(`https://api.elevenlabs.io/v1/sound-generation`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "xi-api-key": apiKey,
-          "accept": "audio/mpeg"
-        },
-        body: JSON.stringify({
-          text: prompt.substring(0, 500), // Limit text to avoid quota issues
-          duration_seconds: 5 // Optional standard duration
-        })
-      });
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API returned: ${response.status} ${response.statusText}`);
+      const response = await api.media.generateAudio(prompt);
+      if (response?.audioDataUrl) {
+        return response.audioDataUrl;
       }
-      const blob = await response.blob();
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-    } catch (err) {
-      console.error("ElevenLabs generation failed, falling back to basic TTS:", err);
+      console.warn('Audio generation service returned invalid data, falling back to TTS.');
+      return fallbackAudio;
+    } catch (error: any) {
+      console.warn('Backend audio generation failed, falling back to TTS.', error?.message || error);
       return fallbackAudio;
     }
   }

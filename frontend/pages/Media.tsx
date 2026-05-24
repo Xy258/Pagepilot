@@ -437,57 +437,24 @@ export default function Media() {
     if (!query) return;
     setLoading(true);
     try {
+      const data = await api.media.searchStock(query, discoveryType);
       if (discoveryType === 'photos') {
-        const response = await fetch(`https://api.unsplash.com/search/photos?query=${query}&per_page=12`, {
-          headers: {
-            Authorization: `Client-ID ${(import.meta as any).env.VITE_UNSPLASH_ACCESS_KEY || ''}`
-          }
-        });
-        const data = await response.json();
         setDiscoveryResults(data.results || []);
       } else if (discoveryType === 'videos') {
-        const response = await fetch(`https://api.pexels.com/videos/search?query=${query}&per_page=12`, {
-          headers: {
-            Authorization: (import.meta as any).env.VITE_PEXELS_API_KEY || ''
-          }
-        });
-        const data = await response.json();
         setDiscoveryResults(data.videos || []);
       } else if (discoveryType === 'audio') {
-        const pixabayKey = (import.meta as any).env.VITE_PIXABAY_API_KEY || '';
-        if (pixabayKey) {
-          console.log("Searching Pixabay Video API for stock audio tracks using API key...");
-          const response = await fetch(`https://pixabay.com/api/videos/?key=${pixabayKey}&q=${encodeURIComponent(query)}&per_page=12`);
-          const data = await response.json();
-          const audioResults = (data.hits || []).map((video: any) => {
-            const audioUrl = video.videos?.tiny?.url || video.videos?.small?.url || '';
-            return {
-              id: `pixabay-${video.id}`,
-              title: video.tags ? video.tags.split(',')[0].toUpperCase() + ' Ambient Soundscape' : 'Pixabay Ambient',
-              artist: video.user || 'Pixabay Creator',
-              url: audioUrl,
-              duration: `${Math.floor(video.duration / 60)}:${String(video.duration % 60).padStart(2, '0')}`,
-              tags: video.tags ? video.tags.split(',').map((t: string) => t.trim()) : []
-            };
-          });
-          setDiscoveryResults(audioResults);
-        } else {
-          console.log("Pixabay key missing. Falling back to stock audio mocks...");
-          const audioMocks = [
-            { id: 'a1', title: 'Minimalist Focus', artist: 'Zenith', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', duration: '3:45' },
-            { id: 'a2', title: 'Urban Flow', artist: 'Metro', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', duration: '4:12' },
-            { id: 'a3', title: 'Celestial Echo', artist: 'Nova', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', duration: '5:20' },
-            { id: 'a4', title: 'Ambient Pulse', artist: 'Echo', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3', duration: '2:50' },
-            { id: 'a5', title: 'Digital Dawn', artist: 'Circuit', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3', duration: '4:05' },
-            { id: 'a6', title: 'Deep Forest', artist: 'Timber', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3', duration: '6:15' },
-            { id: 'a7', title: 'Oceanic Drift', artist: 'Tide', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', duration: '3:30' },
-            { id: 'a8', title: 'Mountain Peak', artist: 'Summit', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3', duration: '5:00' }
-          ];
-          setDiscoveryResults(audioMocks.filter(m => 
-            m.title.toLowerCase().includes(query.toLowerCase()) || 
-            m.artist.toLowerCase().includes(query.toLowerCase())
-          ));
-        }
+        const audioResults = (data.hits || []).map((video: any) => {
+          const audioUrl = video.videos?.large?.url || video.videos?.medium?.url || video.videos?.small?.url || video.videos?.tiny?.url || '';
+          return {
+            id: `pixabay-${video.id}`,
+            title: video.tags ? video.tags.split(',')[0].toUpperCase() + ' Ambient Soundscape' : 'Pixabay Ambient',
+            artist: video.user || 'Pixabay Creator',
+            url: audioUrl,
+            duration: `${Math.floor(video.duration / 60)}:${String(video.duration % 60).padStart(2, '0')}`,
+            tags: video.tags ? video.tags.split(',').map((t: string) => t.trim()) : []
+          };
+        });
+        setDiscoveryResults(audioResults);
       }
     } catch (error) {
       console.error('Discovery error:', error);
@@ -678,20 +645,12 @@ export default function Media() {
         let videoUrl = 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4';
         
         try {
-          const pixabayKey = (import.meta as any).env.VITE_PIXABAY_API_KEY || '55872416-c3b7dd3f8f6a796373a277919';
           const queryWords = aiPrompt.split(' ').filter(w => w.length > 2);
-          const query = encodeURIComponent(queryWords.slice(0, 3).join(' '));
-          const res = await fetch(`https://pixabay.com/api/videos/?key=${pixabayKey}&q=${query}&per_page=3`);
-          const data = await res.json();
-          if (data.hits && data.hits.length > 0) {
-            videoUrl = data.hits[0].videos.medium.url;
-          } else if (queryWords.length > 0) {
-            const singleQuery = encodeURIComponent(queryWords[0]);
-            const res2 = await fetch(`https://pixabay.com/api/videos/?key=${pixabayKey}&q=${singleQuery}&per_page=3`);
-            const data2 = await res2.json();
-            if (data2.hits && data2.hits.length > 0) {
-              videoUrl = data2.hits[0].videos.medium.url;
-            }
+          const query = queryWords.slice(0, 3).join(' ');
+          const data = await api.media.searchStock(query, 'videos');
+          const hit = data.videos?.[0];
+          if (hit?.video_files?.[0]?.link) {
+            videoUrl = hit.video_files[0].link;
           }
         } catch (e) {
           console.error("Dynamic video fetch failed", e);
@@ -1344,13 +1303,24 @@ export default function Media() {
                       <video src={item.video_files[0]?.link} className="w-full h-full object-cover" muted onMouseOver={e => e.currentTarget.play()} onMouseOut={e => e.currentTarget.pause()} />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
-                        <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500">
-                          <Music size={32} />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-stone-900 dark:text-white uppercase truncate w-full">{item.title}</p>
-                          <p className="text-[8px] font-bold text-stone-400 uppercase">{item.artist}</p>
-                        </div>
+                        {item.url ? (
+                          <audio
+                            src={item.url}
+                            controls
+                            preload="metadata"
+                            className="w-full"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
+                            <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500">
+                              <Music size={32} />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-stone-900 dark:text-white uppercase truncate w-full">{item.title}</p>
+                              <p className="text-[8px] font-bold text-stone-400 uppercase">{item.artist}</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="absolute inset-0 bg-stone-900/40 dark:bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">

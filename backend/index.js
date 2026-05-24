@@ -140,6 +140,147 @@ async function analyzeImageVision(base64Data, mimeType, prompt) {
   throw new Error('AI vision generation failed on the server. Please check your API keys and try again.');
 }
 
+async function generateServerContent(prompt, systemInstruction) {
+  if (!serverAi && !serverOpenai && !serverGroq) {
+    throw new Error('No AI content provider configured on the server. Add VITE_GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.');
+  }
+
+  const parseText = (response) => {
+    if (!response) return undefined;
+    if (typeof response === 'string') return response;
+    if (response.text) return response.text;
+    if (response?.choices?.[0]?.message?.content) return response.choices[0].message.content;
+    if (response?.candidates?.[0]?.content?.parts) {
+      return response.candidates[0].content.parts.map((part) => part.text || '').join('');
+    }
+    return undefined;
+  };
+
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+
+  if (serverAi) {
+    for (const model of models) {
+      try {
+        const response = await serverAi.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            systemInstruction: systemInstruction || 'You are a helpful assistant.'
+          }
+        });
+        const text = parseText(response);
+        if (text) return text;
+      } catch (err) {
+        console.warn(`Server Gemini content model ${model} failed:`, err?.message || err);
+      }
+    }
+  }
+
+  if (serverOpenai) {
+    try {
+      const response = await serverOpenai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemInstruction || 'You are a helpful assistant.' },
+          { role: 'user', content: prompt }
+        ]
+      });
+      const text = parseText(response);
+      if (text) return text;
+    } catch (err) {
+      console.warn('Server OpenAI content fallback failed:', err?.message || err);
+    }
+  }
+
+  if (serverGroq) {
+    try {
+      const response = await serverGroq.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: systemInstruction || 'You are a helpful assistant.' },
+          { role: 'user', content: prompt }
+        ]
+      });
+      const text = parseText(response);
+      if (text) return text;
+    } catch (err) {
+      console.warn('Server Groq content fallback failed:', err?.message || err);
+    }
+  }
+
+  throw new Error('Server AI content generation failed. Check available provider keys.');
+}
+
+async function generateServerImage(prompt) {
+  const seed = Math.floor(Math.random() * 1000000);
+  const rawUrl = `image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
+  const imageUrl = `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&nrb=1`;
+
+  if (!serverAi && !serverOpenai) {
+    return imageUrl;
+  }
+
+  try {
+    const response = await serverAi?.models.generateContent({
+      model: 'gemini-3.1-flash-image-preview',
+      contents: { parts: [{ text: prompt }] }
+    });
+    const part = response?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
+    if (part?.inlineData) {
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    }
+  } catch (err) {
+    console.warn('Server Gemini image fallback failed:', err?.message || err);
+  }
+
+  if (serverOpenai) {
+    try {
+      const response = await serverOpenai.images.generate({
+        model: 'dall-e-3',
+        prompt,
+        n: 1,
+        size: '1024x1024',
+        response_format: 'b64_json'
+      });
+      const b64 = response.data?.[0]?.b64_json;
+      if (b64) {
+        return `data:image/png;base64,${b64}`;
+      }
+    } catch (err) {
+      console.warn('Server OpenAI DALL-E fallback failed:', err?.message || err);
+    }
+  }
+
+  return imageUrl;
+}
+
+async function generateServerAudio(prompt) {
+  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.VITE_ELEVENLABS_API_KEY || process.env.VITE_VIDEO_AUDIO_API_KEY;
+  if (!apiKey) {
+    throw new Error('No ElevenLabs API key configured on the server.');
+  }
+
+  const response = await fetch('https://api.elevenlabs.io/v1/sound-generation', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': apiKey,
+      accept: 'audio/mpeg'
+    },
+    body: JSON.stringify({ text: prompt.substring(0, 500), duration_seconds: 5 })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`ElevenLabs API returned ${response.status}: ${body}`);
+  }
+
+  const contentType = response.headers.get('content-type') || 'audio/mpeg';
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const base64 = buffer.toString('base64');
+  return `data:${contentType};base64,${base64}`;
+}
+
 const uploadDir = join(dirname(fileURLToPath(import.meta.url)), 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
@@ -969,6 +1110,92 @@ app.post('/api/vision-tags', async (req, res) => {
   } catch (err) {
     console.error('Vision tags error:', err?.message || err);
     res.status(500).json({ error: err?.message || 'Vision tagging failed' });
+  }
+});
+
+app.post('/api/ai/content', async (req, res) => {
+  try {
+    const { prompt, systemInstruction } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt' });
+    }
+    const text = await generateServerContent(prompt, systemInstruction);
+    res.json({ text });
+  } catch (err) {
+    console.error('AI content error:', err?.message || err);
+    res.status(500).json({ error: err?.message || 'AI content generation failed' });
+  }
+});
+
+app.post('/api/media/generate-image', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt' });
+    }
+    const url = await generateServerImage(prompt);
+    res.json({ url });
+  } catch (err) {
+    console.error('Image generation error:', err?.message || err);
+    res.status(500).json({ error: err?.message || 'Image generation failed' });
+  }
+});
+
+app.post('/api/audio/generate', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt' });
+    }
+    const audioDataUrl = await generateServerAudio(prompt);
+    res.json({ audioDataUrl });
+  } catch (err) {
+    console.error('Audio generation error:', err?.message || err);
+    res.status(500).json({ error: err?.message || 'Audio generation failed' });
+  }
+});
+
+app.get('/api/media/stock-search', async (req, res) => {
+  try {
+    const type = String(req.query.type || 'photos');
+    const query = String(req.query.query || '');
+
+    if (!query) {
+      return res.status(400).json({ error: 'Missing query' });
+    }
+
+    if (type === 'photos') {
+      const key = process.env.VITE_UNSPLASH_ACCESS_KEY;
+      if (!key) return res.status(500).json({ error: 'Unsplash access key not configured' });
+      const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=12`, {
+        headers: { Authorization: `Client-ID ${key}` }
+      });
+      const data = await response.json();
+      return res.json(data);
+    }
+
+    if (type === 'videos') {
+      const key = process.env.VITE_PEXELS_API_KEY;
+      if (!key) return res.status(500).json({ error: 'Pexels API key not configured' });
+      const response = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=12`, {
+        headers: { Authorization: key }
+      });
+      const data = await response.json();
+      return res.json(data);
+    }
+
+    if (type === 'audio') {
+      const key = process.env.VITE_PIXABAY_API_KEY;
+      if (!key) return res.status(500).json({ error: 'Pixabay API key not configured' });
+      const response = await fetch(`https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(query)}&per_page=12`);
+      const data = await response.json();
+      return res.json(data);
+    }
+
+    res.status(400).json({ error: 'Unsupported stock search type' });
+  } catch (err) {
+    console.error('Stock search error:', err?.message || err);
+    res.status(500).json({ error: err?.message || 'Stock search failed' });
   }
 });
 
