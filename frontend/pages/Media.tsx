@@ -1160,15 +1160,18 @@ export default function Media() {
                       {item.url && (item.type === 'image' || item.type === 'video') ? (
                         item.type === 'image' ? (
                           <img 
-                            src={item.url.startsWith('http') && !item.url.includes('localhost') ? `https://images.weserv.nl/?url=${encodeURIComponent(item.url)}&nrb=1` : item.url}
+                            src={item.url}
                             alt="" 
                             referrerPolicy="no-referrer"
                             crossOrigin="anonymous"
+                            loading="lazy"
                             onError={(e) => {
-                               const fallbackUrl = item.url;
-                               if (e.currentTarget.src !== fallbackUrl) {
-                                 e.currentTarget.src = fallbackUrl;
-                               }
+                              const fallbackUrl = item.url?.startsWith('http') && !item.url.includes('localhost')
+                                ? `https://images.weserv.nl/?url=${encodeURIComponent(item.url)}&nrb=1`
+                                : item.url || '';
+                              if (e.currentTarget.src !== fallbackUrl) {
+                                e.currentTarget.src = fallbackUrl;
+                              }
                             }}
                             className="absolute inset-0 w-full h-full object-cover transition-all duration-500 scale-100 group-hover:scale-105" 
                           />
@@ -1425,6 +1428,15 @@ export default function Media() {
                                   src={generatedImg}
                                   referrerPolicy="no-referrer"
                                   className="w-full h-full object-cover animate-in fade-in duration-1000"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    const fallbackUrl = generatedImg?.startsWith('http')
+                                      ? `https://images.weserv.nl/?url=${encodeURIComponent(generatedImg)}&nrb=1`
+                                      : generatedImg || '';
+                                    if (e.currentTarget.src !== fallbackUrl) {
+                                      e.currentTarget.src = fallbackUrl;
+                                    }
+                                  }}
                                   alt="Generated"
                                 />
                                 <div className="absolute inset-0 bg-stone-950/40 dark:bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
@@ -1660,10 +1672,19 @@ export default function Media() {
                       </div>
                     ) : (
                       <img 
-                        src={selectedItem.url.startsWith('http') && !selectedItem.url.includes('localhost') ? `https://images.weserv.nl/?url=${encodeURIComponent(selectedItem.url)}&nrb=1` : selectedItem.url}
+                        src={selectedItem.url}
                         alt="" 
                         referrerPolicy="no-referrer"
                         crossOrigin="anonymous"
+                        loading="lazy"
+                        onError={(e) => {
+                          const fallbackUrl = selectedItem.url?.startsWith('http') && !selectedItem.url.includes('localhost')
+                            ? `https://images.weserv.nl/?url=${encodeURIComponent(selectedItem.url)}&nrb=1`
+                            : selectedItem.url || '';
+                          if (e.currentTarget.src !== fallbackUrl) {
+                            e.currentTarget.src = fallbackUrl;
+                          }
+                        }}
                         className="max-w-full max-h-full object-contain rounded-3xl shadow-2xl"
                       />
                     )
