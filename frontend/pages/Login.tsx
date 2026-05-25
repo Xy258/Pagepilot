@@ -13,7 +13,7 @@ import Logo from '../components/Logo';
 import { useGoogleLogin } from '@react-oauth/google';
 
 export default function Login() {
-  const { user, loading, login, loginWithGoogle } = useAuth();
+  const { user, loading, login, loginWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -46,7 +46,18 @@ export default function Login() {
     setError('');
     setIsLoggingIn(true);
     try {
-      await login({ email, password });
+      const loggedInUser = await login({ email, password });
+      
+      const digitalResilience = localStorage.getItem('digitalResilience') !== 'false';
+      const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
+      
+      if (!digitalResilience && !isAdmin) {
+        logout();
+        setError('System is in maintenance mode. Only administrators can log in.');
+        setIsLoggingIn(false);
+        return;
+      }
+
       setShowSuccess(true);
     } catch (err: any) {
       console.error(err);
@@ -61,7 +72,18 @@ export default function Login() {
       setError('');
       setIsLoggingIn(true);
       try {
-        await loginWithGoogle(codeResponse.code);
+        const loggedInUser = await loginWithGoogle(codeResponse.code);
+        
+        const digitalResilience = localStorage.getItem('digitalResilience') !== 'false';
+        const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
+        
+        if (!digitalResilience && !isAdmin) {
+          logout();
+          setError('System is in maintenance mode. Only administrators can log in.');
+          setIsLoggingIn(false);
+          return;
+        }
+
         setShowSuccess(true);
       } catch (err: any) {
         console.error(err);

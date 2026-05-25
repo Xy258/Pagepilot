@@ -148,15 +148,6 @@ export default function NotificationDropdown() {
                                <p className={`text-[11px] leading-relaxed line-clamp-2 font-medium transition-colors ${!n.read ? 'text-stone-300' : 'text-stone-500 group-hover:text-stone-400'}`}>
                                  {n.message}
                                </p>
-                               {n.link && (
-                                 <Link 
-                                   to={n.link} 
-                                   onClick={() => { setIsOpen(false); markAsRead(n._id || n.id || ''); }}
-                                   className="inline-flex items-center gap-2 mt-3 text-[9px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-[0.2em] transition-all group-hover:translate-x-1"
-                                 >
-                                   View <ExternalLink size={10} />
-                                 </Link>
-                               )}
                             </div>
                          </div>
                          

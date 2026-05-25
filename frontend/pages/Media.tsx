@@ -198,7 +198,7 @@ export default function Media() {
     }
     setLoading(true);
     try {
-      await api.media.update(selectedItem.id, { name: renameValue.trim() });
+      await api.media.update(String(selectedItem.id), { name: renameValue.trim() });
       setItems(items.map(i => i.id === selectedItem.id ? { ...i, name: renameValue.trim() } : i));
       setSelectedItem({ ...selectedItem, name: renameValue.trim() });
       toast('Artifact Renamed', 'Name updated successfully.', 'success');
@@ -444,7 +444,7 @@ export default function Media() {
         setDiscoveryResults(data.videos || []);
       } else if (discoveryType === 'audio') {
         const audioResults = (data.hits || []).map((video: any) => {
-          const audioUrl = video.videos?.large?.url || video.videos?.medium?.url || video.videos?.small?.url || video.videos?.tiny?.url || '';
+          const audioUrl = video.videos?.tiny?.url || video.videos?.small?.url || '';
           return {
             id: `pixabay-${video.id}`,
             title: video.tags ? video.tags.split(',')[0].toUpperCase() + ' Ambient Soundscape' : 'Pixabay Ambient',
@@ -1300,27 +1300,17 @@ export default function Media() {
                     {discoveryType === 'photos' ? (
                       <img src={item.urls.small} alt={item.alt_description} referrerPolicy="no-referrer" crossOrigin="anonymous" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     ) : discoveryType === 'videos' ? (
-                      <video src={item.video_files[0]?.link} className="w-full h-full object-cover" muted onMouseOver={e => e.currentTarget.play()} onMouseOut={e => e.currentTarget.pause()} />
+                      <video src={item.video_files?.[0]?.link} className="w-full h-full object-cover" muted onMouseOver={e => e.currentTarget.play()} onMouseOut={e => e.currentTarget.pause()} />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
-                        {item.url ? (
-                          <audio
-                            src={item.url}
-                            controls
-                            preload="metadata"
-                            className="w-full"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
-                            <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500">
-                              <Music size={32} />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-black text-stone-900 dark:text-white uppercase truncate w-full">{item.title}</p>
-                              <p className="text-[8px] font-bold text-stone-400 uppercase">{item.artist}</p>
-                            </div>
-                          </div>
-                        )}
+                        <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500">
+                          <Music size={32} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-stone-900 dark:text-white uppercase truncate w-full">{item.title}</p>
+                          <p className="text-[8px] font-bold text-stone-400 uppercase">{item.artist}</p>
+                          {item.duration && <p className="text-[8px] text-stone-400 mt-1">{item.duration}</p>}
+                        </div>
                       </div>
                     )}
                     <div className="absolute inset-0 bg-stone-900/40 dark:bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">

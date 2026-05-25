@@ -8,7 +8,7 @@ import Sidebar from '../components/Sidebar';
 import NotificationDropdown from '../components/NotificationDropdown';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User as UserIcon, Bell, Menu, X, Layout } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { useNotificationSimulator } from '../services/notificationSimulator';
@@ -17,6 +17,21 @@ export default function MainLayout() {
   const { profile, user, logout } = useAuth();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [digitalResilience, setDigitalResilience] = useState(() => {
+    return localStorage.getItem('digitalResilience') !== 'false';
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setDigitalResilience(localStorage.getItem('digitalResilience') !== 'false');
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('digitalResilienceChange', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('digitalResilienceChange', handleStorageChange);
+    };
+  }, []);
 
   // useNotificationSimulator();
 
@@ -57,7 +72,7 @@ export default function MainLayout() {
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-24 bg-white dark:bg-stone-900 border-b border-stone-200/60 dark:border-stone-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-30 sticky top-0 transition-colors duration-300">
+        <header className="h-24 bg-white dark:bg-stone-900 border-b border-stone-200/60 dark:border-stone-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-[60] sticky top-0 transition-colors duration-300">
           <div className="flex items-center gap-4 md:gap-8 min-w-0">
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -74,8 +89,10 @@ export default function MainLayout() {
           <div className="flex items-center gap-4 md:gap-8 shrink-0">
             <div className="hidden xl:flex items-center gap-2 bg-stone-50/50 dark:bg-stone-800/50 p-1 rounded-2xl border border-stone-100 dark:border-stone-800">
                <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-stone-900 rounded-xl shadow-sm border border-stone-100 dark:border-stone-800">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse"></div>
-                  <span className="text-[10px] font-black text-stone-900 dark:text-white uppercase tracking-widest">Site Online</span>
+                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${digitalResilience ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'}`}></div>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${digitalResilience ? 'text-stone-900 dark:text-white' : 'text-rose-500'}`}>
+                    {digitalResilience ? 'Site Online' : 'Site Offline'}
+                  </span>
                </div>
                <div className="px-4 py-2 text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-[0.2em]">
                   Page Pilot Production

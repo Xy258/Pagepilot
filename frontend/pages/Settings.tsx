@@ -59,6 +59,9 @@ export default function Settings() {
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [digitalResilience, setDigitalResilience] = useState(() => {
+    return localStorage.getItem('digitalResilience') !== 'false';
+  });
 
   const [siteName, setSiteName] = useState('Artisan Workshop');
   const [siteDescription, setSiteDescription] = useState('');
@@ -738,7 +741,7 @@ export default function Settings() {
                     <button 
                       key={t}
                       onClick={() => {
-                        setTheme(t);
+                        setTheme(t as any);
                         setPalette(t as any);
                       }}
                       className={`p-6 rounded-[2.5rem] border transition-all text-center space-y-3 ${
@@ -819,8 +822,19 @@ export default function Settings() {
                     <h3 className="text-lg font-bold text-stone-900 dark:text-white mb-2 tracking-tight transition-colors">Digital Resilience</h3>
                     <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed transition-colors">Manage your cloud footprints and ensure your digital core remains lean and performant.</p>
                   </div>
-                  <div className="mt-8 p-4 bg-white/50 dark:bg-stone-900/50 rounded-2xl border border-stone-100 dark:border-stone-700">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest text-center">System Status: Active</p>
+                  <div className="mt-8 p-4 bg-white/50 dark:bg-stone-900/50 rounded-2xl border border-stone-100 dark:border-stone-700 flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest text-center">System Status: {digitalResilience ? 'Active' : 'Deactivated'}</p>
+                    <button
+                      onClick={() => {
+                        const newState = !digitalResilience;
+                        setDigitalResilience(newState);
+                        localStorage.setItem('digitalResilience', String(newState));
+                        window.dispatchEvent(new Event('digitalResilienceChange'));
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${digitalResilience ? 'bg-emerald-500' : 'bg-stone-300 dark:bg-stone-700'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${digitalResilience ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
                   </div>
                 </div>
               </div>
