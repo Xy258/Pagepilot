@@ -294,23 +294,14 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-const LOCAL_URI = 'mongodb://127.0.0.1:27017/artisan-workshop';
 const ATLAS_URI = 'mongodb://ullasmahesh21_db_user:6Amns8FjGvoT3Fld@ac-fw9iegd-shard-00-02.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-00.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-01.azydkb8.mongodb.net:27017/artisan-workshop?ssl=true&authSource=admin&replicaSet=atlas-7o49gd-shard-0';
 const MONGODB_URI = process.env.MONGODB_URI || ATLAS_URI;
 
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log(`✅ Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Local'})`))
-  .catch(async err => {
-    console.error(`❌ Primary MongoDB Connection Error: ${err.message}`);
-    if (MONGODB_URI !== LOCAL_URI) {
-      console.log('🔄 Attempting fallback to local MongoDB...');
-      try {
-        await mongoose.connect(LOCAL_URI);
-        console.log('✅ Connected to MongoDB (Local Fallback)');
-      } catch (fallbackErr) {
-        console.error('❌ Local Fallback MongoDB Connection Error:', fallbackErr.message);
-      }
-    }
+mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 5000 })
+  .then(() => console.log(`✅ Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Atlas'})`))
+  .catch(err => {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    process.exit(1);
   });
 
 // Email Transporter - robust init with Ethereal fallback for local development
@@ -1430,7 +1421,12 @@ app.get('*', (req, res) => {
   res.status(404).send('Frontend build not found. Please run "npm run build" in the frontend directory first or use the vite dev server.');
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-});
+// Start Server locally if not in production/serverless environment
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+  });
+}
+
+// Export app for serverless deployment (Vercel)
+export default app;
