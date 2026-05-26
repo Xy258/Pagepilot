@@ -76,7 +76,10 @@ export const api = {
   
   // Posts/Articles
   posts: {
-    list: async (params?: any) => request(`/posts?${new URLSearchParams(params)}`),
+    list: async (params?: any) => {
+      const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+      return request(`/posts${query}`);
+    },
     get: async (slug: string) => request(`/posts/${slug}`),
     create: async (data: any) => request('/posts', { method: 'POST', body: JSON.stringify(data) }),
     update: async (id: string, data: any) => request(`/posts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
