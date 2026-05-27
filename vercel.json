@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "builds": [
     {
       "src": "frontend/package.json",
@@ -16,14 +16,17 @@
   "env": {
     "VITE_API_BASE_URL": "/api"
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "/backend/index.js"
+      "handle": "filesystem"
     },
     {
-      "source": "/(.*)",
-      "destination": "/frontend/dist/index.html"
+      "src": "/api/(.*)",
+      "dest": "/backend/index.js"
+    },
+    {
+      "src": "^/(.*)$",
+      "dest": "/frontend/dist/index.html"
     }
   ]
 }

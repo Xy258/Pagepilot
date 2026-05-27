@@ -7,8 +7,12 @@ const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/g, '');
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  const baseUrl = API_BASE_URL.startsWith('http')
+    ? API_BASE_URL
+    : `${window.location.origin}${API_BASE_URL}`;
+  const url = new URL(`${normalizedEndpoint}`, `${baseUrl}/`).toString();
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
