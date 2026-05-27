@@ -2,11 +2,13 @@
  * API client connecting to local MongoDB backend.
  */
 
-const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || (import.meta as any).env.VITE_API_URL || ((import.meta as any).env.DEV ? 'http://localhost:3000/api' : '/api');
+const rawApiBaseUrl = (import.meta as any).env.VITE_API_BASE_URL || (import.meta as any).env.VITE_API_URL || ((import.meta as any).env.DEV ? 'http://localhost:3000/api' : '/api');
+const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/g, '');
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-  const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
