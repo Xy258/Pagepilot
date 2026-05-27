@@ -72,7 +72,7 @@ export default function MainLayout() {
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-24 bg-white dark:bg-stone-900 border-b border-stone-200/60 dark:border-stone-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-[60] sticky top-0 transition-colors duration-300">
+        <header className="h-24 bg-white dark:bg-stone-900 border-b border-stone-200/60 dark:border-stone-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-30 sticky top-0 transition-colors duration-300">
           <div className="flex items-center gap-4 md:gap-8 min-w-0">
             <button
               onClick={() => setIsSidebarOpen(true)}

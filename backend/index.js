@@ -213,8 +213,7 @@ async function generateServerContent(prompt, systemInstruction) {
 
 async function generateServerImage(prompt) {
   const seed = Math.floor(Math.random() * 1000000);
-  const rawUrl = `image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
-  const imageUrl = `https://images.weserv.nl/?url=${encodeURIComponent(rawUrl)}&nrb=1`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${seed}&nologo=true`;
 
   if (!serverAi && !serverOpenai) {
     return imageUrl;

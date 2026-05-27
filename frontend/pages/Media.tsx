@@ -1021,7 +1021,7 @@ export default function Media() {
           ) : activeTab === 'discovery' ? (
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
               <div className="flex bg-stone-50 dark:bg-stone-950 p-1 rounded-2xl border border-stone-100 dark:border-stone-800">
-                {(['photos', 'videos', 'audio'] as const).map(type => (
+                {(['photos', 'videos'] as const).map(type => (
                   <button
                     key={type}
                     onClick={() => {
@@ -1093,7 +1093,6 @@ export default function Media() {
                 { id: 'all', label: 'All Artifacts', icon: Globe },
                 { id: 'image', label: 'Visuals', icon: ImageIcon },
                 { id: 'video', label: 'Cinematics', icon: Video },
-                { id: 'audio', label: 'Echos', icon: Music },
                 { id: 'ebook', label: 'Manuscripts', icon: FileText },
               ].map((btn) => (
                 <button
@@ -1165,14 +1164,6 @@ export default function Media() {
                             referrerPolicy="no-referrer"
                             crossOrigin="anonymous"
                             loading="lazy"
-                            onError={(e) => {
-                              const fallbackUrl = item.url?.startsWith('http') && !item.url.includes('localhost')
-                                ? `https://images.weserv.nl/?url=${encodeURIComponent(item.url)}&nrb=1`
-                                : item.url || '';
-                              if (e.currentTarget.src !== fallbackUrl) {
-                                e.currentTarget.src = fallbackUrl;
-                              }
-                            }}
                             className="absolute inset-0 w-full h-full object-cover transition-all duration-500 scale-100 group-hover:scale-105" 
                           />
                         ) : (
@@ -1363,7 +1354,6 @@ export default function Media() {
                                 { id: 'image', label: 'Image', icon: ImageIcon },
                                 { id: 'video', label: 'Video', icon: Video },
                                 { id: 'audio', label: 'Audio', icon: Music },
-                                { id: 'ebook', label: 'Manuscript', icon: FileText },
                               ].map(t => (
                                 <button 
                                   key={t.id}
@@ -1429,14 +1419,6 @@ export default function Media() {
                                   referrerPolicy="no-referrer"
                                   className="w-full h-full object-cover animate-in fade-in duration-1000"
                                   loading="lazy"
-                                  onError={(e) => {
-                                    const fallbackUrl = generatedImg?.startsWith('http')
-                                      ? `https://images.weserv.nl/?url=${encodeURIComponent(generatedImg)}&nrb=1`
-                                      : generatedImg || '';
-                                    if (e.currentTarget.src !== fallbackUrl) {
-                                      e.currentTarget.src = fallbackUrl;
-                                    }
-                                  }}
                                   alt="Generated"
                                 />
                                 <div className="absolute inset-0 bg-stone-950/40 dark:bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">

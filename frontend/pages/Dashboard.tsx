@@ -132,7 +132,7 @@ export default function Dashboard() {
   }, [user]);
 
   const chartData = topPosts.map(p => ({
-    name: p.title.substring(0, 12) + (p.title.length > 12 ? '...' : ''),
+    name: (p.title || '').substring(0, 12) + ((p.title || '').length > 12 ? '...' : ''),
     views: p.views || 0,
     time: Math.round((p.secondsSpent || 0) / (p.views || 1)),
     readingDepth: Math.min(100, Math.round(((p.secondsSpent || 0) / (p.views || 1)) / 180 * 100))
@@ -262,6 +262,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="h-48 sm:h-64 md:h-80 w-full overflow-hidden">
+            {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <defs>
@@ -318,6 +319,12 @@ export default function Dashboard() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center text-stone-300 dark:text-stone-700">
+               <BarChart2 size={48} className="mb-4 opacity-50" />
+               <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">No Post Analytics Available</p>
+            </div>
+          )}
           </div>
         </div>
  

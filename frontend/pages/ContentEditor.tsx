@@ -167,14 +167,19 @@ export default function ContentEditor() {
   }, []);
 
   const handleCreatePost = async () => {
-    if (!user) return;
+    const activeUser = user || profile;
+    if (!activeUser) {
+      alert('User session not found');
+      return;
+    }
+    setLoading(true);
     try {
       const newPost = {
         title: 'Untitled Post',
-        slug: 'untitled-' + Math.random().toString(36).substring(7),
+        slug: `untitled-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         content: '',
         status: 'draft',
-        authorId: user.uid,
+        authorId: activeUser.uid || activeUser._id || activeUser.id,
         category: '',
         excerpt: '',
         tags: [],
@@ -185,10 +190,13 @@ export default function ContentEditor() {
         secondsSpent: 0
       };
       const createdPost = await api.posts.create(newPost);
-      fetchPosts();
+      await fetchPosts();
       handleSelectPost(createdPost);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create post:', err);
+      alert('Failed to create post: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1001,10 +1009,11 @@ export default function ContentEditor() {
           <h2 className="font-serif font-bold text-stone-900 dark:text-white">Articles</h2>
           <button 
             onClick={handleCreatePost}
-            className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+            disabled={loading}
+            className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
             title="Create New Post (Ctrl+N)"
           >
-            <Plus size={18} />
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
           </button>
         </div>
         <div className="p-4">
@@ -1752,9 +1761,10 @@ export default function ContentEditor() {
                <p className="text-stone-500 max-w-sm mb-10 leading-relaxed italic">Page Pilot is ready for your stories. Select an article to begin editing or create something new.</p>
                <button 
                 onClick={handleCreatePost}
-                className="bg-stone-900 text-white px-8 py-3 rounded-2xl font-bold uppercase tracking-widest text-sm hover:bg-stone-800 transition-all flex items-center gap-3 active:scale-95 shadow-xl shadow-stone-900/10"
+                disabled={loading}
+                className="bg-stone-900 text-white px-8 py-3 rounded-2xl font-bold uppercase tracking-widest text-sm hover:bg-stone-800 transition-all flex items-center gap-3 active:scale-95 shadow-xl shadow-stone-900/10 disabled:opacity-50"
                >
-                 <Plus size={20} /> Create New Story
+                 {loading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Create New Story
                </button>
             </motion.div>
           )}

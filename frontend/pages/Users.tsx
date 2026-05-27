@@ -800,54 +800,6 @@ export default function Users() {
                         <Trash2 size={18} />
                       </button>
                     )}
-                    <div className="relative">
-                      <button 
-                        onClick={() => setActiveMenu(activeMenu === (user._id || user.id) ? null : (user._id || user.id))}
-                        className={`w-10 h-10 rounded-xl transition-all flex items-center justify-center border ${activeMenu === (user._id || user.id) ? 'bg-amber-50 text-amber-600 border-amber-200' : 'text-stone-300 hover:text-amber-600 hover:bg-amber-50 border-transparent hover:border-amber-100'}`}
-                      >
-                        <MoreVertical size={18} />
-                      </button>
-                      
-                      <AnimatePresence>
-                        {activeMenu === (user._id || user.id) && (
-                          <>
-                            <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
-                            <motion.div 
-                              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                              className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-stone-100 p-2 z-20"
-                            >
-                              <button 
-                                onClick={() => initiateMessage(user)}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                              >
-                                <Mail size={14} /> Send Message
-                              </button>
-                              <button 
-                                onClick={() => handleEditUser(user)}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                              >
-                                <Briefcase size={14} /> Edit Title
-                              </button>
-                              <button 
-                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-amber-50 hover:text-amber-700 transition-colors"
-                              >
-                                <Activity size={14} /> View History
-                              </button>
-                              {(profile?._id !== (user._id || user.id)) && (
-                                <button 
-                                  onClick={() => initiateDelete(user)}
-                                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                                >
-                                  <Trash2 size={14} /> Remove Member
-                                </button>
-                              )}
-                            </motion.div>
-                          </>
-                        )}
-                      </AnimatePresence>
-                    </div>
                   </div>
                 </td>
               </tr>
