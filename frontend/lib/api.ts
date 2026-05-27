@@ -6,7 +6,7 @@ const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || (import.meta 
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
