@@ -1,17 +1,22 @@
+// API client connecting to the backend.
+// It automatically prefixes every endpoint with the base URL.
+// The base URL is taken from the VITE_API_BASE_URL env variable (set in .env files).
+// If not defined, it falls back to the current origin (window.location.origin),
+// which works for local development where the frontend serves the API from the same host.
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL?.trim() || "").replace(/\\/+$/g, "")
+  || window.location.origin;
+
 /**
- * API client connecting to local MongoDB backend.
+ * Generic request helper used by all API namespaces.
+ * @param endpoint Relative endpoint (e.g. "/auth/login")
+ * @param options Fetch init options
  */
-
-const rawApiBaseUrl = (import.meta as any).env.VITE_API_BASE_URL || (import.meta as any).env.VITE_API_URL || ((import.meta as any).env.DEV ? 'http://localhost:3000/api' : '/api');
-const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/g, '');
-
-async function request(endpoint: string, options: RequestInit = {}) {
+export async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
   const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-  const normalizedEndpoint = endpoint.replace(/^\/+/, '');
-  const baseUrl = API_BASE_URL.startsWith('http')
-    ? API_BASE_URL
-    : `${window.location.origin}${API_BASE_URL}`;
-  const url = new URL(`${normalizedEndpoint}`, `${baseUrl}/`).toString();
+  const normalizedEndpoint = endpoint.replace(/^\\/+/, "");
+  const url = `${API_BASE_URL}/${normalizedEndpoint}`;
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -20,18 +25,18 @@ async function request(endpoint: string, options: RequestInit = {}) {
       ...options.headers,
     },
   });
+
   if (!response.ok) {
-    let bodyText = '';
-    try {
-      bodyText = await response.text();
-    } catch (e) {
-      bodyText = '';
-    }
-    throw new Error(JSON.stringify({ status: response.status, statusText: response.statusText, url: response.url, body: bodyText }));
+    let body = "";
+    try { body = await response.text(); } catch (_) {}
+    throw new Error(JSON.stringify({ status: response.status, statusText: response.statusText, url, body }));
   }
   return response.json();
 }
 
+// -------------------------------------------------------------------
+// Mock user – used for local dev when no real auth is set up.
+// -------------------------------------------------------------------
 const mockUser = {
   uid: 'local-user-id',
   email: 'local@artisan.workshop',
@@ -40,47 +45,31 @@ const mockUser = {
   avatarUrl: ''
 };
 
-export const auth = {
-  currentUser: mockUser
-};
-
+export const auth = { currentUser: mockUser };
 export const db = {};
-
-export function normalizeData(data: any): any {
-  return data;
-}
+export function normalizeData(data: any): any { return data; }
 
 export const api = {
   // Auth
   auth: {
-    me: async () => {
-      const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-      return request('/auth/me', { headers: { 'x-user-id': uid } });
-    },
+    me: async () => request('/auth/me', { headers: { 'x-user-id': localStorage.getItem('artisan_user_id') || 'local-user-id' } }),
     login: async (data: any) => {
       const user = await request('/auth/login', { method: 'POST', body: JSON.stringify(data) });
       localStorage.setItem('artisan_user_id', user.uid);
       return user;
     },
     loginWithGoogle: async (authCode: string, role?: string) => {
-      const user = await request('/auth/google', { 
-        method: 'POST',
-        body: JSON.stringify({ code: authCode, role })
-      });
+      const user = await request('/auth/google', { method: 'POST', body: JSON.stringify({ code: authCode, role }) });
       localStorage.setItem('artisan_user_id', user.uid);
       return user;
     }
   },
-
+  // AI helpers (unchanged)
   ai: {
     generateContent: async (prompt: string, systemInstruction?: string) =>
-      request('/ai/content', {
-        method: 'POST',
-        body: JSON.stringify({ prompt, systemInstruction })
-      })
+      request('/ai/content', { method: 'POST', body: JSON.stringify({ prompt, systemInstruction }) })
   },
-  
-  // Posts/Articles
+  // Posts / Articles
   posts: {
     list: async (params?: any) => {
       const query = params ? `?${new URLSearchParams(params).toString()}` : '';
@@ -95,40 +84,23 @@ export const api = {
     addComment: async (id: string, data: any) => request(`/posts/${id}/comments`, { method: 'POST', body: JSON.stringify(data) }),
     addReply: async (id: string, commentId: string, data: any) => request(`/posts/${id}/comments/${commentId}/reply`, { method: 'POST', body: JSON.stringify(data) })
   },
-  
-  // Media
+  // Media helpers (unchanged)
   media: {
     list: async () => request('/media'),
     update: async (id: string, data: any) => request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     upload: async (file: File) => {
       const uid = localStorage.getItem('artisan_user_id') || mockUser.uid;
       const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-      
+      const dataUrl = await new Promise<string>(resolve => { reader.onload = () => resolve(reader.result as string); reader.readAsDataURL(file); });
       const fileNameLower = file.name.toLowerCase();
       const isAudioExt = fileNameLower.endsWith('.mp3') || fileNameLower.endsWith('.wav') || fileNameLower.endsWith('.m4a') || fileNameLower.endsWith('.ogg') || fileNameLower.endsWith('.aac');
       const isVideoExt = fileNameLower.endsWith('.mp4') || fileNameLower.endsWith('.webm') || fileNameLower.endsWith('.mov');
-      
       let detectedType = 'other';
       if (file.type.startsWith('image/')) detectedType = 'image';
       else if (isAudioExt || file.type.startsWith('audio/')) detectedType = 'audio';
       else if (isVideoExt || file.type.startsWith('video/')) detectedType = 'video';
       else if (file.type.includes('pdf') || file.type.includes('epub') || fileNameLower.endsWith('.pdf')) detectedType = 'ebook';
-
-      return request('/media', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: file.name,
-          type: detectedType,
-          url: dataUrl,
-          size: (file.size / 1024).toFixed(1) + ' KB',
-          sizeBytes: file.size,
-          ownerId: uid
-        })
-      });
+      return request('/media', { method: 'POST', body: JSON.stringify({ name: file.name, type: detectedType, url: dataUrl, size: (file.size / 1024).toFixed(1) + ' KB', sizeBytes: file.size, ownerId: uid }) });
     },
     saveReference: async (data: any) => request('/media', { method: 'POST', body: JSON.stringify(data) }),
     rehost: async (data: { url: string; name?: string }) => request('/proxy-image', { method: 'POST', body: JSON.stringify(data) }),
@@ -136,17 +108,14 @@ export const api = {
     generateImage: async (prompt: string) => request('/media/generate-image', { method: 'POST', body: JSON.stringify({ prompt }) }),
     generateAudio: async (prompt: string) => request('/audio/generate', { method: 'POST', body: JSON.stringify({ prompt }) }),
     searchStock: async (query: string, type: string) => request(`/media/stock-search?type=${encodeURIComponent(type)}&query=${encodeURIComponent(query)}`),
-
     delete: async (id: string) => request(`/media/${id}`, { method: 'DELETE' }),
-    generateVideo: async (data: { prompt: string, style?: string }) => request('/videos/generate', { method: 'POST', body: JSON.stringify(data) }),
+    generateVideo: async (data: { prompt: string; style?: string }) => request('/videos/generate', { method: 'POST', body: JSON.stringify(data) })
   },
-  
   // Settings
   settings: {
     get: async () => request('/settings'),
-    update: async (data: any) => request('/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+    update: async (data: any) => request('/settings', { method: 'PATCH', body: JSON.stringify(data) })
   },
-  
   // Notifications
   notifications: {
     list: async () => request('/notifications'),
@@ -154,60 +123,44 @@ export const api = {
     readAll: async () => request('/notifications/read-all', { method: 'POST' }),
     markAsRead: async (id: string) => request(`/notifications/${id}/read`, { method: 'POST' }),
     delete: async (id: string) => request(`/notifications/${id}`, { method: 'DELETE' }),
-    clearAll: async () => request('/notifications', { method: 'DELETE' }),
+    clearAll: async () => request('/notifications', { method: 'DELETE' })
   },
-
   // Users
   users: {
     list: async () => request('/users'),
     update: async (id: string, data: any) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: async (id: string) => request(`/users/${id}`, { method: 'DELETE' }),
-    invite: async (data: any) => request('/invitations', { method: 'POST', body: JSON.stringify(data) }),
+    invite: async (data: any) => request('/invitations', { method: 'POST', body: JSON.stringify(data) })
   },
-
+  // Sites
   sites: {
     list: async (limitCount?: number) => request(`/sites${limitCount ? `?limit=${limitCount}` : ''}`),
     create: async (data: any) => request('/sites', { method: 'POST', body: JSON.stringify(data) }),
-    delete: async (id: string) => request(`/sites/${id}`, { method: 'DELETE' }),
+    delete: async (id: string) => request(`/sites/${id}`, { method: 'DELETE' })
   },
-
+  // Themes
   themes: {
     list: async () => request('/themes'),
     create: async (data: any) => request('/themes', { method: 'POST', body: JSON.stringify(data) }),
     update: async (id: string, data: any) => request(`/themes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    delete: async (id: string) => request(`/themes/${id}`, { method: 'DELETE' }),
+    delete: async (id: string) => request(`/themes/${id}`, { method: 'DELETE' })
   },
-
+  // Products
   products: {
     list: async () => request('/products'),
     create: async (data: any) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
     update: async (id: string, data: any) => request(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: async (id: string) => request(`/products/${id}`, { method: 'DELETE' }),
-    clearAll: async () => request('/products', { method: 'DELETE' }),
+    clearAll: async () => request('/products', { method: 'DELETE' })
   },
-
+  // Orders
   orders: {
     list: async () => request('/orders'),
     create: async (data: any) => request('/orders', { method: 'POST', body: JSON.stringify(data) }),
-    clearAll: async () => request('/orders', { method: 'DELETE' }),
+    clearAll: async () => request('/orders', { method: 'DELETE' })
   },
-
+  // Feedback
   feedback: {
-    send: async (data: any) => request('/feedback', { method: 'POST', body: JSON.stringify(data) }),
-    list: async () => request('/feedback'),
-  },
-  
-  adminLogs: {
-    list: async () => request('/admin-logs'),
-    record: async (action: string, detail?: string) => request('/admin-logs', { method: 'POST', body: JSON.stringify({ action, detail }) }),
-  },
-
-  system: {
-    seed: async () => request('/system/seed', { method: 'POST' }),
-  },
-  
-  invitations: {
-    send: async (data: { email: string; role?: string; siteName?: string }) => 
-      request('/invitations', { method: 'POST', body: JSON.stringify(data) }),
+    send: async (data: any) => request('/feedback', { method: 'POST', body: JSON.stringify(data) })
   }
 };
