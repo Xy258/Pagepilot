@@ -7,7 +7,7 @@ const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/g, '');
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  const normalizedEndpoint = endpoint.replace(/^\/+/, '');
   const baseUrl = API_BASE_URL.startsWith('http')
     ? API_BASE_URL
     : `${window.location.origin}${API_BASE_URL}`;
