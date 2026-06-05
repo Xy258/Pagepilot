@@ -12,12 +12,19 @@ export default defineConfig(({mode}) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        '@assets': path.resolve(__dirname, 'attached_assets'),
       },
     },
     server: {
       host: '0.0.0.0',
       allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
+      },
     },
   };
 });
