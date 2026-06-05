@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
       } else {
         const currentUser = await api.auth.me();
+        if (currentUser?.uid) localStorage.setItem('artisan_user_id', currentUser.uid);
         setUser(currentUser);
         setProfile(currentUser);
       }
@@ -52,9 +53,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadAuth();
   }, []);
 
+  const storeUid = (u: any) => {
+    if (u?.uid) localStorage.setItem('artisan_user_id', u.uid);
+  };
+
   const login = async (data: any) => {
     localStorage.removeItem('mock_logged_out');
     const currentUser = await api.auth.login(data);
+    storeUid(currentUser);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;
@@ -63,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (data: any) => {
     localStorage.removeItem('mock_logged_out');
     const currentUser = await api.auth.login(data);
+    storeUid(currentUser);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;
@@ -71,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const guestLogin = async () => {
     localStorage.removeItem('mock_logged_out');
     const currentUser = await api.auth.me();
+    storeUid(currentUser);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;
@@ -79,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (authCode: string, role?: string) => {
     localStorage.removeItem('mock_logged_out');
     const currentUser = await api.auth.loginWithGoogle(authCode, role);
+    storeUid(currentUser);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;

@@ -72,7 +72,8 @@ export default function Login() {
 
   const checkAndShowRolePicker = (loggedInUser: any) => {
     const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
-    if (isAdmin) {
+    const hasChosenRole = ['editor', 'author'].includes(loggedInUser?.role);
+    if (isAdmin || hasChosenRole) {
       setShowSuccess(true);
       return;
     }
