@@ -835,12 +835,6 @@ app.patch('/api/settings', async (req, res) => {
 
 
 
-app.get('/api/notifications', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const notifications = await Notification.find({ userId: uid }).sort({ createdAt: -1 });
-  res.json(notifications);
-});
-
 // Orders
 const orderSchema = new mongoose.Schema({
   userId: String,
@@ -875,7 +869,7 @@ app.post('/api/invitations', async (req, res) => {
     const invitation = await Invitation.create({ email, role, siteName, token });
     // Send email if transporter is configured
     if (transporter) {
-      const inviteLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/signup?token=${token}&role=${role}`;
+      const inviteLink = `${process.env.CLIENT_URL || 'https://pagepilot--pcoo05758.replit.app'}/signup?token=${token}&role=${role}`;
       const mailOptions = {
         from: process.env.SMTP_USER || 'no-reply@artisan.workshop',
         to: email,
@@ -1272,7 +1266,7 @@ app.post('/api/invitations', async (req, res) => {
           <p>Hello,</p>
           <p>You have been invited to join <strong>${siteName || 'Artisan Workshop'}</strong> as a <strong>${role || 'Editor'}</strong>.</p>
           <div style="margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/signup?email=${encodeURIComponent(email)}&role=${encodeURIComponent(role || 'editor')}" 
+            <a href="${process.env.FRONTEND_URL || 'https://pagepilot--pcoo05758.replit.app'}/signup?email=${encodeURIComponent(email)}&role=${encodeURIComponent(role || 'editor')}" 
                style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Accept Invitation
             </a>
