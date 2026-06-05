@@ -4,7 +4,7 @@
 // If not defined, it falls back to the current origin (window.location.origin),
 // which works for local development where the frontend serves the API from the same host.
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL?.trim() || "").replace(/\\/+$/g, "")
+const API_BASE_URL = (((import.meta as any).env?.VITE_API_BASE_URL as string)?.trim() || "").replace(/\/+$/g, "")
   || window.location.origin;
 
 /**
@@ -14,7 +14,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL?.trim() || "").replace(/
  */
 export async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
   const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
-  const normalizedEndpoint = endpoint.replace(/^\\/+/, "");
+  const normalizedEndpoint = endpoint.replace(/^\/+/, "");
   const url = `${API_BASE_URL}/${normalizedEndpoint}`;
 
   const response = await fetch(url, {
@@ -161,6 +161,7 @@ export const api = {
   },
   // Feedback
   feedback: {
-    send: async (data: any) => request('/feedback', { method: 'POST', body: JSON.stringify(data) })
+    send: async (data: any) => request('/feedback', { method: 'POST', body: JSON.stringify(data) }),
+    list: async () => request('/feedback')
   }
 };

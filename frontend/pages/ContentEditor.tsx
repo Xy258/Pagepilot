@@ -190,8 +190,9 @@ export default function ContentEditor() {
         secondsSpent: 0
       };
       const createdPost = await api.posts.create(newPost);
-      await fetchPosts();
+      // Open editor immediately with the created post, refresh list in background
       handleSelectPost(createdPost);
+      fetchPosts().catch((err) => console.error('Refresh posts failed after create:', err));
     } catch (err: any) {
       console.error('Failed to create post:', err);
       alert('Failed to create post: ' + err.message);

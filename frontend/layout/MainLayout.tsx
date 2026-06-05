@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import NotificationDropdown from '../components/NotificationDropdown';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User as UserIcon, Bell, Menu, X, Layout } from 'lucide-react';
+import { LogOut, User as UserIcon, Bell, Menu, X, Layout, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -16,7 +16,9 @@ import { useNotificationSimulator } from '../services/notificationSimulator';
 export default function MainLayout() {
   const { profile, user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [digitalResilience, setDigitalResilience] = useState(() => {
     return localStorage.getItem('digitalResilience') !== 'false';
   });
@@ -33,15 +35,67 @@ export default function MainLayout() {
     };
   }, []);
 
-  // useNotificationSimulator();
-
   const getPageTitle = () => {
     const path = location.pathname.split('/')[1];
     return path ? path.charAt(0).toUpperCase() + path.slice(1) : 'Dashboard';
   };
 
+  const handleLogout = async () => {
+    await logout();
+    setShowLogoutConfirm(false);
+    navigate('/login');
+  };
+
   return (
     <div className="flex h-screen bg-stone-50 dark:bg-stone-950 font-sans text-stone-900 dark:text-stone-100 leading-relaxed overflow-hidden transition-colors duration-300">
+      {/* Logout Confirm Modal */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLogoutConfirm(false)}
+              className="absolute inset-0 bg-stone-950/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-sm bg-white dark:bg-stone-900 rounded-[2.5rem] shadow-2xl overflow-hidden p-8 border border-stone-100 dark:border-stone-800"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <LogOut size={28} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-stone-900 dark:text-white">Sign Out</h3>
+                  <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">End Session</p>
+                </div>
+              </div>
+              <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed mb-8">
+                Are you sure you want to sign out? You'll need to log in again to access the workspace.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 bg-rose-600 text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-900/20 active:scale-95"
+                >
+                  Yes, Sign Out
+                </button>
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="px-6 bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-stone-200 dark:hover:bg-stone-700 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Desktop Sidebar */}
       <div className="hidden lg:block h-full">
         <Sidebar onClose={() => setIsSidebarOpen(false)} />
@@ -133,9 +187,9 @@ export default function MainLayout() {
                   )}
                 </div>
               <button 
-                onClick={() => logout()}
-                className="text-stone-300 dark:text-stone-700 hover:text-stone-600 dark:hover:text-stone-400 transition-all p-2 hover:bg-stone-50 dark:hover:bg-stone-800 rounded-xl active:scale-90"
-                title="Logout"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="text-stone-300 dark:text-stone-700 hover:text-rose-500 dark:hover:text-rose-400 transition-all p-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl active:scale-90"
+                title="Sign Out"
               >
                 <LogOut className="w-4 h-4" />
               </button>

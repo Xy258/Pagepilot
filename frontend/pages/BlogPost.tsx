@@ -57,8 +57,10 @@ export default function BlogPost() {
 
     const actualId = post._id;
 
-    // Track view
+    // Track view — skip if the viewer is the author
+    const isAuthor = user && (post.authorId === user.uid || post.authorId === user._id || post.authorId === user.id);
     const trackView = async () => {
+      if (isAuthor) return;
       try {
         await api.posts.trackView(actualId);
 

@@ -924,7 +924,7 @@ export default function Media() {
             <div className="text-center pointer-events-none">
               <Upload size={64} className="text-emerald-500 mx-auto mb-4 animate-bounce" />
               <h2 className="text-4xl font-serif font-black text-white">Drop Artifacts to Enshrine</h2>
-              <p className="text-stone-300 mt-2 text-sm uppercase tracking-widest">Images • Video • Audio • Manuscripts</p>
+              <p className="text-stone-300 mt-2 text-sm uppercase tracking-widest">Images • Video • Audio</p>
             </div>
           </motion.div>
         )}
@@ -1093,7 +1093,7 @@ export default function Media() {
                 { id: 'all', label: 'All Artifacts', icon: Globe },
                 { id: 'image', label: 'Visuals', icon: ImageIcon },
                 { id: 'video', label: 'Cinematics', icon: Video },
-                { id: 'ebook', label: 'Manuscripts', icon: FileText },
+                
               ].map((btn) => (
                 <button
                   key={btn.id}

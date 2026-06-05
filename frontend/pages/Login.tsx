@@ -6,14 +6,43 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, Mail, Lock, Loader2, CheckCircle2, Clock } from 'lucide-react';
+import { LogIn, Mail, Lock, Loader2, CheckCircle2, Clock, Edit3, PenTool, Shield, Eye, BookOpen, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { notificationService } from '../services/notificationService';
 import Logo from '../components/Logo';
 import { useGoogleLogin } from '@react-oauth/google';
+import { api } from '../lib/api';
+
+const ROLES = [
+  {
+    id: 'editor',
+    label: 'Editor',
+    icon: Edit3,
+    color: 'emerald',
+    description: 'Full content management access',
+    abilities: [
+      'Create & publish articles',
+      'Manage site design & builder',
+      'Access media library',
+      'Moderate comments',
+    ],
+  },
+  {
+    id: 'author',
+    label: 'Author',
+    icon: PenTool,
+    color: 'sky',
+    description: 'Content creation focused',
+    abilities: [
+      'Write & draft articles',
+      'Upload to media library',
+      'View own analytics',
+      'Comment on posts',
+    ],
+  },
+];
 
 export default function Login() {
-  const { user, loading, login, loginWithGoogle, logout } = useAuth();
+  const { user, loading, login, loginWithGoogle, logout, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,6 +50,10 @@ export default function Login() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [countdown, setCountdown] = useState(3);
+  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [pendingUser, setPendingUser] = useState<any>(null);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [isSavingRole, setIsSavingRole] = useState(false);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -35,7 +68,18 @@ export default function Login() {
   }, [showSuccess, countdown, navigate]);
 
   if (loading) return null;
-  if (user && !showSuccess) return <Navigate to="/dashboard" />;
+  if (user && !showSuccess && !showRolePicker) return <Navigate to="/dashboard" />;
+
+  const checkAndShowRolePicker = (loggedInUser: any) => {
+    const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
+    if (isAdmin) {
+      setShowSuccess(true);
+      return;
+    }
+    setPendingUser(loggedInUser);
+    setShowRolePicker(true);
+    setIsLoggingIn(false);
+  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +102,7 @@ export default function Login() {
         return;
       }
 
-      setShowSuccess(true);
+      checkAndShowRolePicker(loggedInUser);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Invalid email or password. Please try again.');
@@ -84,7 +128,7 @@ export default function Login() {
           return;
         }
 
-        setShowSuccess(true);
+        checkAndShowRolePicker(loggedInUser);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Google authentication failed.');
@@ -97,14 +141,94 @@ export default function Login() {
     },
   });
 
-  const handleGoogleLogin = () => {
-    googleLogin();
+  const handleRoleSelect = async (role: string) => {
+    if (!pendingUser) return;
+    setSelectedRole(role);
+    setIsSavingRole(true);
+    try {
+      const userId = pendingUser._id || pendingUser.id;
+      await api.users.update(userId, { role });
+      await refreshProfile();
+    } catch (err) {
+      console.error('Failed to save role:', err);
+    } finally {
+      setIsSavingRole(false);
+      setShowRolePicker(false);
+      setShowSuccess(true);
+    }
   };
 
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center p-6 selection:bg-emerald-100 dark:selection:bg-emerald-900 selection:text-emerald-900 dark:selection:text-emerald-100 transition-colors duration-300">
       <AnimatePresence mode="wait">
-        {!showSuccess ? (
+        {showRolePicker ? (
+          <motion.div
+            key="role-picker"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-3xl shadow-xl shadow-stone-200/50 dark:shadow-none p-8 border border-stone-100 dark:border-stone-800 relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-500 to-sky-500"></div>
+            
+            <div className="flex flex-col items-center mb-8">
+              <Link to="/" className="mb-5 hover:scale-105 transition-transform">
+                <Logo size={56} />
+              </Link>
+              <h1 className="text-2xl font-serif font-black text-stone-900 dark:text-white mb-1 tracking-tighter text-center">Choose Your Role</h1>
+              <p className="text-stone-400 dark:text-stone-500 text-center text-[10px] uppercase tracking-[0.4em] font-black leading-none">Define Your Access & Authority</p>
+            </div>
+
+            <p className="text-sm text-stone-500 dark:text-stone-400 text-center mb-6 leading-relaxed">
+              Select the role that best describes how you'll use the workspace. This shapes your access and what you can do.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+              {ROLES.map((role) => (
+                <button
+                  key={role.id}
+                  onClick={() => handleRoleSelect(role.id)}
+                  disabled={isSavingRole}
+                  className={`group relative flex flex-col p-6 rounded-2xl border-2 text-left transition-all active:scale-[0.98] disabled:opacity-60 ${
+                    selectedRole === role.id
+                      ? role.color === 'emerald'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20'
+                        : 'border-sky-500 bg-sky-50 dark:bg-sky-950/20'
+                      : 'border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500 bg-white dark:bg-stone-800/50'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${
+                    role.color === 'emerald' 
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400'
+                  }`}>
+                    {isSavingRole && selectedRole === role.id ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <role.icon size={20} />
+                    )}
+                  </div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-white mb-1">{role.label}</h3>
+                  <p className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-widest mb-3">{role.description}</p>
+                  <ul className="space-y-1.5">
+                    {role.abilities.map((ability, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-stone-600 dark:text-stone-400">
+                        <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                          role.color === 'emerald' ? 'bg-emerald-500' : 'bg-sky-500'
+                        }`}></span>
+                        {ability}
+                      </li>
+                    ))}
+                  </ul>
+                </button>
+              ))}
+            </div>
+
+            <p className="text-center text-[10px] text-stone-400 dark:text-stone-600 leading-relaxed">
+              You can always update your role later in Settings.
+            </p>
+          </motion.div>
+        ) : !showSuccess ? (
           <motion.div 
             key="login-form"
             initial={{ opacity: 0, y: 20 }}
@@ -200,7 +324,7 @@ export default function Login() {
             </div>
 
             <button
-              onClick={handleGoogleLogin}
+              onClick={() => googleLogin()}
               disabled={isLoggingIn}
               className="w-full flex items-center justify-center gap-3 bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 font-medium py-3 rounded-2xl transition-all shadow-sm active:scale-[0.98]"
             >

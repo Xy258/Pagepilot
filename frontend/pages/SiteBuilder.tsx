@@ -264,7 +264,7 @@ function SortableItem({
 
         {section.type === 'image' && (
           <div className={`overflow-hidden ${getRadiusClass()} bg-stone-100 border border-stone-200 aspect-[16/9] relative group/img`}>
-             <img src={section.content.url || 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1200&auto=format&fit=crop'} alt="Section" className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110" />
+             <img src={section.content.url || 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=1200&auto=format&fit=crop'} alt="Section" referrerPolicy="no-referrer" crossOrigin="anonymous" className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110" />
              <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent flex items-end p-8">
                <p className="text-white text-xs font-bold uppercase tracking-widest opacity-80">{section.content.caption}</p>
              </div>
@@ -275,7 +275,7 @@ function SortableItem({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-2">
                 {[1, 2, 3].map((_, i) => (
                   <div key={i} className={`aspect-square bg-stone-100 ${getRadiusClass()} overflow-hidden border border-stone-100`}>
-                <img src={section.content.urls?.[i] || `https://images.unsplash.com/photo-${1500 + i}?w=400&h=400&fit=crop`} alt="Gallery" className="w-full h-full object-cover" />
+                <img src={section.content.urls?.[i] || `https://images.unsplash.com/photo-${1500 + i}?w=400&h=400&fit=crop`} alt="Gallery" referrerPolicy="no-referrer" crossOrigin="anonymous" className="w-full h-full object-cover" />
               </div>
             ))}
           </div>
@@ -1448,18 +1448,6 @@ export default function SiteBuilder() {
                           <Monitor size={16} />
                           Full Preview
                         </button>
-
-                        <div className="h-px bg-stone-100 my-1 mx-2" />
-
-                        <Link 
-                          to="/"
-                          target="_blank"
-                          onClick={() => setShowActionsMenu(false)}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors uppercase tracking-widest"
-                        >
-                          <Globe size={16} />
-                          Live Site
-                        </Link>
 
                         <button 
                           onClick={() => { handleSaveSite(); setShowActionsMenu(false); }}

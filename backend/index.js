@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import bcrypt from 'bcryptjs';
 dotenv.config();
 if (fs.existsSync('./.env.local')) {
   dotenv.config({ path: './.env.local', override: true });
@@ -378,7 +379,8 @@ const userSchema = new mongoose.Schema({
   uid: { type: String, required: true, unique: true },
   email: String,
   displayName: String,
-  role: { type: String, default: 'user' },
+  passwordHash: String,
+  role: { type: String, default: 'author' },
   avatarUrl: String,
   bio: String,
   jobTitle: String,
@@ -464,18 +466,36 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  // In our local mock, we just find or create based on email
-  let user = await User.findOne({ email });
-  if (!user) {
-    user = await User.create({
-      uid: `user-${Date.now()}`,
-      email,
-      displayName: email.split('@')[0],
-      role: req.body.role || 'author'
-    });
+  try {
+    const { email, password } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+      user = await User.create({
+        uid: `user-${Date.now()}`,
+        email,
+        displayName: email.split('@')[0],
+        role: req.body.role || 'author',
+        passwordHash
+      });
+      localStorage?.setItem?.('artisan_user_id', user.uid);
+    } else {
+      if (password && user.passwordHash) {
+        const valid = await bcrypt.compare(password, user.passwordHash);
+        if (!valid) return res.status(401).json({ error: 'Invalid email or password.' });
+      } else if (password && !user.passwordHash) {
+        const passwordHash = await bcrypt.hash(password, 10);
+        user.passwordHash = passwordHash;
+        await user.save();
+      }
+    }
+    res.json(user);
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Login failed. Please try again.' });
   }
-  res.json(user);
 });
 
 app.post('/api/auth/google', async (req, res) => {
