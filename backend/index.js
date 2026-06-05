@@ -1423,8 +1423,8 @@ app.post('/api/videos/generate', async (req, res) => {
 // Serve frontend in production (Render deployment)
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
-// Serve static files from the React app
-app.use(express.static(join(currentDir, '../dist')));
+// Serve static files from the React app build
+app.use(express.static(join(currentDir, '../frontend/dist')));
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send // Serve frontend in production
@@ -1443,12 +1443,10 @@ app.get('*', (req, res) => {
   res.status(404).send('Frontend build not found. Please run "npm run build" in the frontend directory first or use the vite dev server.');
 });
 
-// Start Server locally if not in production/serverless environment
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-  });
-}
+// Start Server
+app.listen(PORT, () => {
+  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+});
 
 // Export app for serverless deployment (Vercel)
 export default app;
