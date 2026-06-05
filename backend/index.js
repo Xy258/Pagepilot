@@ -294,8 +294,11 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-const ATLAS_URI = 'mongodb://ullasmahesh21_db_user:6Amns8FjGvoT3Fld@ac-fw9iegd-shard-00-02.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-00.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-01.azydkb8.mongodb.net:27017/artisan-workshop?ssl=true&authSource=admin&replicaSet=atlas-7o49gd-shard-0';
-const MONGODB_URI = process.env.MONGODB_URI || ATLAS_URI;
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is not set.');
+  process.exit(1);
+}
 
 mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 5000 })
   .then(() => console.log(`✅ Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Atlas'})`))
