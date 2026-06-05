@@ -4,8 +4,7 @@
 // If not defined, it falls back to the current origin (window.location.origin),
 // which works for local development where the frontend serves the API from the same host.
 
-const API_BASE_URL = (((import.meta as any).env?.VITE_API_BASE_URL as string)?.trim() || "").replace(/\/+$/g, "")
-  || window.location.origin;
+const API_BASE_URL = (((import.meta as any).env?.VITE_API_BASE_URL as string)?.trim() || "/api").replace(/\/+$/g, "");
 
 /**
  * Generic request helper used by all API namespaces.
