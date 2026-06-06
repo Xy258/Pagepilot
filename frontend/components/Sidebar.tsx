@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
+import { useState, useEffect } from 'react';
 
 import Logo from './Logo';
 
@@ -26,6 +27,21 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
   const { profile } = useAuth();
   const role = profile?.role || 'author';
+  const [cloudOnline, setCloudOnline] = useState(true);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { method: 'GET', signal: AbortSignal.timeout(4000) });
+        setCloudOnline(res.ok || res.status === 401);
+      } catch {
+        setCloudOnline(false);
+      }
+    };
+    check();
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const installedPlugins = profile?.plugins || [];
   
@@ -134,19 +150,22 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           <div className="flex items-center justify-between mb-3">
             <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.1em]">Cloud Status</p>
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)] animate-pulse"></div>
-              <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tighter">not Operational</span>
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${cloudOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'}`}></div>
+              <span className={`text-[9px] font-bold uppercase tracking-tighter ${cloudOnline ? 'text-emerald-400' : 'text-rose-500'}`}>
+                {cloudOnline ? 'Operational' : 'Not Operational'}
+              </span>
             </div>
           </div>
           <div className="flex flex-col gap-1">
              <div className="h-1 w-full bg-stone-800 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }}
-                  animate={{ width: "1%" }}
-                  className="h-full bg-rose-500/50"
+                  animate={{ width: cloudOnline ? "82%" : "1%" }}
+                  transition={{ duration: 1.2, ease: "easeOut" }}
+                  className={`h-full ${cloudOnline ? 'bg-emerald-500/60' : 'bg-rose-500/50'}`}
                 />
              </div>
-             <p className="text-[9px] text-stone-600 font-bold uppercase tracking-widest mt-1">Storage 1%</p>
+             <p className="text-[9px] text-stone-600 font-bold uppercase tracking-widest mt-1">{cloudOnline ? 'All Systems Normal' : 'Service Unreachable'}</p>
           </div>
         </div>
       </div>
