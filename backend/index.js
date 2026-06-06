@@ -455,16 +455,10 @@ const Site = mongoose.model('Site', siteSchema);
 
 // API Routes
 app.get('/api/auth/me', async (req, res) => {
-  const uid = req.headers['x-user-id'] || 'local-user-id';
-  let user = await User.findOne({ uid });
-  if (!user && uid === 'local-user-id') {
-    user = await User.create({
-      uid: 'local-user-id',
-      email: 'local@artisan.workshop',
-      displayName: 'Local Artisan',
-      role: 'admin'
-    });
-  }
+  const uid = req.headers['x-user-id'];
+  if (!uid) return res.status(401).json({ error: 'Not authenticated' });
+  const user = await User.findOne({ uid });
+  if (!user) return res.status(401).json({ error: 'User not found' });
   res.json(user);
 });
 
@@ -480,10 +474,9 @@ app.post('/api/auth/login', async (req, res) => {
         uid: `user-${Date.now()}`,
         email,
         displayName: email.split('@')[0],
-        role: req.body.role || 'author',
+        role: req.body.role || null,
         passwordHash
       });
-      localStorage?.setItem?.('artisan_user_id', user.uid);
     } else {
       if (password && user.passwordHash) {
         const valid = await bcrypt.compare(password, user.passwordHash);
@@ -521,7 +514,7 @@ app.post('/api/auth/google', async (req, res) => {
       uid: payload.sub,
       email: payload.email,
       displayName: payload.name,
-      role: req.body.role || 'author',
+      role: null,
       avatarUrl: payload.picture
     };
     
@@ -530,7 +523,7 @@ app.post('/api/auth/google', async (req, res) => {
       user = await User.create(googleUser);
       await Notification.create({
         userId: user.uid,
-        title: 'Welcome to Artisan Workshop!',
+        title: 'Welcome to Page Pilot!',
         message: 'We are thrilled to have you here. Start writing your first masterpiece!',
         type: 'welcome',
         read: false
@@ -538,28 +531,8 @@ app.post('/api/auth/google', async (req, res) => {
     }
     return res.json(user);
   } catch (error) {
-    console.error('Google Auth Real Verification Failed. Falling back to Mock User for local testing.', error.message);
-    // Fallback to mock user so the user is not blocked
-    const mockGoogleUser = {
-      uid: 'google-user-id',
-      email: 'google@artisan.workshop',
-      displayName: 'Google Artisan (Mock)',
-      role: req.body.role || 'author',
-      avatarUrl: 'https://ui-avatars.com/api/?name=Google+Artisan&background=4285F4&color=fff'
-    };
-    
-    let user = await User.findOne({ uid: mockGoogleUser.uid });
-    if (!user) {
-      user = await User.create(mockGoogleUser);
-      await Notification.create({
-        userId: user.uid,
-        title: 'Welcome to Artisan Workshop!',
-        message: 'We are thrilled to have you here. Start writing your first masterpiece!',
-        type: 'welcome',
-        read: false
-      });
-    }
-    return res.json(user);
+    console.error('Google Auth failed:', error.message);
+    return res.status(401).json({ error: 'Google authentication failed. Please try again.' });
   }
 });
 
