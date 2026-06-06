@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
-import { useState, useEffect } from 'react';
 
 import Logo from './Logo';
 
@@ -27,25 +26,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
   const { profile } = useAuth();
   const role = profile?.role || 'author';
-  const [cloudOnline, setCloudOnline] = useState(true);
-
-  useEffect(() => {
-    const check = async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      try {
-        const res = await fetch('/health', { method: 'GET', signal: controller.signal });
-        setCloudOnline(res.ok);
-      } catch {
-        setCloudOnline(false);
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-    check();
-    const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const cloudOnline = false;
 
   const installedPlugins = profile?.plugins || [];
   
