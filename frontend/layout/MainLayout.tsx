@@ -19,20 +19,22 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [digitalResilience, setDigitalResilience] = useState(() => {
-    return localStorage.getItem('digitalResilience') !== 'false';
-  });
+  const [siteOnline, setSiteOnline] = useState(true);
 
   useEffect(() => {
-    const handleStorageChange = () => {
-      setDigitalResilience(localStorage.getItem('digitalResilience') !== 'false');
+    const check = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { method: 'GET', signal: AbortSignal.timeout(4000) });
+        setSiteOnline(res.ok || res.status === 401);
+      } catch {
+        setSiteOnline(navigator.onLine);
+      }
     };
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('digitalResilienceChange', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('digitalResilienceChange', handleStorageChange);
-    };
+    check();
+    const interval = setInterval(check, 30000);
+    window.addEventListener('online', () => setSiteOnline(true));
+    window.addEventListener('offline', () => setSiteOnline(false));
+    return () => clearInterval(interval);
   }, []);
 
   const getPageTitle = () => {
@@ -143,9 +145,9 @@ export default function MainLayout() {
           <div className="flex items-center gap-4 md:gap-8 shrink-0">
             <div className="hidden xl:flex items-center gap-2 bg-stone-50/50 dark:bg-stone-800/50 p-1 rounded-2xl border border-stone-100 dark:border-stone-800">
                <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-stone-900 rounded-xl shadow-sm border border-stone-100 dark:border-stone-800">
-                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${digitalResilience ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'}`}></div>
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${digitalResilience ? 'text-stone-900 dark:text-white' : 'text-rose-500'}`}>
-                    {digitalResilience ? 'Site Online' : 'Site Offline'}
+                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${siteOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'}`}></div>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${siteOnline ? 'text-stone-900 dark:text-white' : 'text-rose-500'}`}>
+                    {siteOnline ? 'Site Online' : 'Site Offline'}
                   </span>
                </div>
                <div className="px-4 py-2 text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-[0.2em]">
