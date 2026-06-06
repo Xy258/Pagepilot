@@ -12,18 +12,17 @@ const API_BASE_URL = (((import.meta as any).env?.VITE_API_BASE_URL as string)?.t
  * @param options Fetch init options
  */
 export async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
-  const uid = localStorage.getItem('artisan_user_id') || 'local-user-id';
+  const uid = localStorage.getItem('artisan_user_id') || '';
   const normalizedEndpoint = endpoint.replace(/^\/+/, "");
   const url = `${API_BASE_URL}/${normalizedEndpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-user-id': uid,
-      ...options.headers,
-    },
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (uid) headers['x-user-id'] = uid;
+
+  const response = await fetch(url, { ...options, headers });
 
   if (!response.ok) {
     let body = "";
@@ -51,7 +50,7 @@ export function normalizeData(data: any): any { return data; }
 export const api = {
   // Auth
   auth: {
-    me: async () => request('/auth/me', { headers: { 'x-user-id': localStorage.getItem('artisan_user_id') || 'local-user-id' } }),
+    me: async () => request('/auth/me'),
     login: async (data: any) => {
       const user = await request('/auth/login', { method: 'POST', body: JSON.stringify(data) });
       localStorage.setItem('artisan_user_id', user.uid);

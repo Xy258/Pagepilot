@@ -35,18 +35,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Simulate auth state load
     const loadAuth = async () => {
       setLoading(true);
+      const storedUid = localStorage.getItem('artisan_user_id');
       const isLoggedOut = localStorage.getItem('mock_logged_out');
-      if (isLoggedOut === 'true') {
+      if (isLoggedOut === 'true' || !storedUid) {
         setUser(null);
         setProfile(null);
-      } else {
+        setLoading(false);
+        return;
+      }
+      try {
         const currentUser = await api.auth.me();
-        if (currentUser?.uid) localStorage.setItem('artisan_user_id', currentUser.uid);
         setUser(currentUser);
         setProfile(currentUser);
+      } catch {
+        localStorage.removeItem('artisan_user_id');
+        setUser(null);
+        setProfile(null);
       }
       setLoading(false);
     };
@@ -76,12 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const guestLogin = async () => {
-    localStorage.removeItem('mock_logged_out');
-    const currentUser = await api.auth.me();
-    storeUid(currentUser);
-    setUser(currentUser);
-    setProfile(currentUser);
-    return currentUser;
+    // Guest login removed — users must sign in with a real account
   };
 
   const loginWithGoogle = async (authCode: string, role?: string) => {

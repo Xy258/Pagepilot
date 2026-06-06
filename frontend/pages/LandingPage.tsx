@@ -230,19 +230,9 @@ export default function LandingPage() {
     fetchSite();
   }, []);
 
-  const handleGetStarted = async (e: React.MouseEvent) => {
+  const handleGetStarted = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (user) {
-      navigate('/dashboard');
-      return;
-    }
-    try {
-      await guestLogin();
-      navigate('/dashboard');
-    } catch (err) {
-      console.error('Guest login failed:', err);
-      navigate('/signup');
-    }
+    navigate(user ? '/dashboard' : '/login');
   };
 
   if (loading) {
