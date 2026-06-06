@@ -19,27 +19,7 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [siteOnline, setSiteOnline] = useState(true);
-
-  useEffect(() => {
-    const check = async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      try {
-        const res = await fetch('/health', { method: 'GET', signal: controller.signal });
-        setSiteOnline(res.ok);
-      } catch {
-        setSiteOnline(navigator.onLine);
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-    check();
-    const interval = setInterval(check, 30000);
-    window.addEventListener('online', () => setSiteOnline(true));
-    window.addEventListener('offline', () => setSiteOnline(false));
-    return () => clearInterval(interval);
-  }, []);
+  const siteOnline = true;
 
   const getPageTitle = () => {
     const path = location.pathname.split('/')[1];
