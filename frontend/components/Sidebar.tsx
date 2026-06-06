@@ -31,11 +31,15 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     const check = async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
       try {
-        const res = await fetch('/api/auth/me', { method: 'GET', signal: AbortSignal.timeout(4000) });
-        setCloudOnline(res.ok || res.status === 401);
+        const res = await fetch('/health', { method: 'GET', signal: controller.signal });
+        setCloudOnline(res.ok);
       } catch {
         setCloudOnline(false);
+      } finally {
+        clearTimeout(timer);
       }
     };
     check();

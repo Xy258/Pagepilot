@@ -23,11 +23,15 @@ export default function MainLayout() {
 
   useEffect(() => {
     const check = async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
       try {
-        const res = await fetch('/api/auth/me', { method: 'GET', signal: AbortSignal.timeout(4000) });
-        setSiteOnline(res.ok || res.status === 401);
+        const res = await fetch('/health', { method: 'GET', signal: controller.signal });
+        setSiteOnline(res.ok);
       } catch {
         setSiteOnline(navigator.onLine);
+      } finally {
+        clearTimeout(timer);
       }
     };
     check();

@@ -1417,6 +1417,9 @@ app.post('/api/videos/generate', async (req, res) => {
 // Serve frontend in production (Render deployment)
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
+// Health check — always returns 200, used by frontend status indicators
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 // Serve static files from the React app build
 app.use(express.static(join(currentDir, '../frontend/dist')));
 
