@@ -20,6 +20,8 @@ import { GoogleGenAI } from '@google/genai';
 import { Groq } from 'groq-sdk';
 
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), './.env.local') });
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), './.env.development.local') });
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env.development.local') });
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || process.env.PORT || 5000;
@@ -355,9 +357,9 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI = process.env.MONGODB_CONNECTION_STRING || process.env.MONGODB_URI;
 if (!MONGODB_URI) {
-  console.error('❌ MONGODB_URI environment variable is not set.');
+  console.error('❌ MONGODB_CONNECTION_STRING environment variable is not set.');
   process.exit(1);
 }
 

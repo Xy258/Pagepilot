@@ -90,7 +90,7 @@ https://your-project.vercel.app
 In Railway → Your Project → **Variables**, add:
 
 ```
-MONGODB_URI = <set your database connection string in the backend environment>
+MONGODB_CONNECTION_STRING = <set your database connection string in the backend environment>
 PUBLIC_API_URL = https://your-backend.railway.app
 FRONTEND_URL = https://your-project.vercel.app
 GEMINI_API_KEY = <set as a server-side secret>
@@ -152,7 +152,7 @@ After all steps complete:
 - Check build logs in Vercel dashboard
 
 ### Backend connection errors
-- Verify MONGODB_URI is correct in Railway
+- Verify MONGODB_CONNECTION_STRING is correct in Railway
 - Check MongoDB Atlas IP whitelist
 - Test connection: `node testAtlas.mjs`
 
