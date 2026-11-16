@@ -8,7 +8,7 @@ import Logo from './Logo';
 
 export default function LoadingScreen() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-stone-50 z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-white dark:bg-stone-950 z-50" role="status" aria-label="Loading your workspace">
       <div className="flex flex-col items-center gap-8">
         <Logo size={120} animated={true} showText={true} />
         
@@ -21,7 +21,7 @@ export default function LoadingScreen() {
               transition={{ duration: 2, repeat: Infinity }}
             />
           </div>
-          <p className="text-stone-400 font-sans text-[10px] uppercase tracking-[0.2em] animate-pulse">
+          <p className="text-stone-500 dark:text-stone-400 font-sans text-[10px] uppercase tracking-[0.2em] animate-pulse">
             Chiseling your vision into reality
           </p>
         </div>
