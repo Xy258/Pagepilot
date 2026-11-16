@@ -17,15 +17,19 @@ export default defineConfig(({mode}) => {
     },
     server: {
       host: '0.0.0.0',
-      allowedHosts: true,
+      allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean),
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          target: env.VITE_BACKEND_URL || 'http://localhost:3000',
           changeOrigin: true,
         },
         '/health': {
-          target: 'http://localhost:3000',
+          target: env.VITE_BACKEND_URL || 'http://localhost:3000',
+          changeOrigin: true,
+        },
+        '/uploads': {
+          target: env.VITE_BACKEND_URL || 'http://localhost:3000',
           changeOrigin: true,
         },
       },

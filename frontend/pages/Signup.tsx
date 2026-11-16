@@ -8,7 +8,6 @@ import { useNavigate, Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserPlus, Mail, Lock, User, Clock, Loader2, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { notificationService } from '../services/notificationService';
 import Logo from '../components/Logo';
 import { useGoogleLogin } from '@react-oauth/google';
 
@@ -16,7 +15,6 @@ export default function Signup() {
   const { user, loading, register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const invitedRole = searchParams.get('role');
   const [email, setEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -37,9 +35,6 @@ export default function Signup() {
     return () => clearInterval(timer);
   }, [showSuccess, countdown, navigate]);
 
-  if (loading) return null;
-  if (user && !showSuccess) return <Navigate to="/dashboard" />;
-
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !fullName) {
@@ -51,16 +46,8 @@ export default function Signup() {
     setIsSigningUp(true);
     
     try {
-      await register({ email, password, displayName: fullName, role: invitedRole });
+      await register({ email, password, displayName: fullName });
       
-      // Notify admins
-      await notificationService.notifyAdmins({
-        title: 'New Artisan Account',
-        message: `${fullName} (${email}) has just joined the realm.`,
-        type: 'info',
-        link: '/users'
-      });
-
       setShowSuccess(true);
     } catch (err: any) {
       console.error(err);
@@ -75,7 +62,7 @@ export default function Signup() {
       setError('');
       setIsSigningUp(true);
       try {
-        await loginWithGoogle(codeResponse.code, invitedRole || undefined);
+        await loginWithGoogle(codeResponse.code);
         setShowSuccess(true);
       } catch (err: any) {
         console.error(err);
@@ -91,6 +78,9 @@ export default function Signup() {
   const handleGoogleSignup = () => {
     googleSignup();
   };
+
+  if (loading) return null;
+  if (user && !showSuccess) return <Navigate to="/dashboard" />;
 
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center p-6 selection:bg-emerald-100 dark:selection:bg-emerald-900 selection:text-emerald-900 dark:selection:text-emerald-100 transition-colors duration-300">
@@ -167,6 +157,8 @@ export default function Signup() {
                   </div>
                   <input
                     type="password"
+                    minLength={12}
+                    maxLength={128}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"

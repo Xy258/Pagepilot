@@ -194,41 +194,42 @@ function RenderSection({ section, style }: { section: Section, style: SiteStyle 
 }
 
 export default function LandingPage() {
-  const { guestLogin, user } = useAuth();
+  const { guestLogin, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [siteData, setSiteData] = useState<{ sections: Section[], style: SiteStyle } | null>(null);
   const [team, setTeam] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
+    let active = true;
     const fetchSite = async () => {
-      try {
-        const [sites, users] = await Promise.all([
-          api.sites.list(),
-          api.users.list()
-        ]);
-
-        if (sites && sites.length > 0) {
-          const latest = sites[0];
-          setSiteData({
-            sections: latest.sections,
-            style: latest.style
-          });
-        }
-        
-        if (users) {
-          const founders = ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'];
-          const filtered = users.filter((u: any) => u.email && founders.includes(u.email));
-          setTeam(filtered);
-        }
-      } catch (err) {
-        console.error('Failed to fetch data:', err);
-      } finally {
+      if (!user) {
+        setSiteData(null);
+        setTeam([]);
         setLoading(false);
+        return;
+      }
+      try {
+        const sites = await api.sites.list();
+        if (!active) return;
+        if (sites?.length) {
+          const latest = sites[0];
+          setSiteData({ sections: latest.sections, style: latest.style });
+        } else {
+          setSiteData(null);
+        }
+        setTeam([]);
+      } catch (err) {
+        console.error('Failed to fetch site data:', err);
+      } finally {
+        if (active) setLoading(false);
       }
     };
+    setLoading(true);
     fetchSite();
-  }, []);
+    return () => { active = false; };
+  }, [authLoading, user?.uid]);
 
   const handleGetStarted = (e: React.MouseEvent) => {
     e.preventDefault();

@@ -145,7 +145,7 @@ export default function MainLayout() {
               <div className="text-right hidden sm:block">
                 <div className="flex items-center gap-2 justify-end mb-1">
                   <p className="text-xs font-bold text-stone-900 dark:text-white leading-none truncate max-w-[120px]">{profile?.displayName || user?.email?.split('@')[0]}</p>
-                  {['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(profile?.email || '') && (
+                  {profile?.role === 'admin' && (
                     <span className="text-[7px] font-black bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 px-1 py-0.5 rounded uppercase tracking-widest">Founder</span>
                   )}
                 </div>

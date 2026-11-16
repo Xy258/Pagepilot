@@ -47,20 +47,19 @@ In Vercel Project Settings → **Environment Variables**, add:
 
 ```
 VITE_API_BASE_URL = https://your-backend.railway.app/api
-VITE_GEMINI_API_KEY = AIzaSyBUYaS-q-M2XEalrr-aCKkYPjSNpEsQp8A
-VITE_GEMINI_API_KEY_2 = AIzaSyAII6s8kIIRsXmbXoFXIvX-FELdLW4qNIo
-VITE_GEMINI_API_KEY_3 = AIzaSyA45IQNuobwkUQQCu4UIw-_Q8RCDBMoWIw
-VITE_GEMINI_API_KEY_4 = AIzaSyC9dwjzfjZnpniP1bmdfaGCIC3S8ifXgK8
-VITE_GEMINI_API_KEY_5 = AIzaSyB_aXmKX_5o4YzI4g5RVZqTCQx10DE1ME8
-VITE_GEMINI_API_KEY_6 = AIzaSyCEg4HlVe3XgkCbwH1J1UAuijAXe6RzvrM
-VITE_OPENAI_API_KEY = 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
-VITE_GROQ_API_KEY = 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
-VITE_UNSPLASH_ACCESS_KEY = oBCVbi9xNT93ZzLI6QmefPEJ1ArzXpdcvbEGVm0S2_E
-VITE_PEXELS_API_KEY = hfL5jQK7KBVGq5e7PFHS8D835b3dRgucdTDLyOZ6ZgGXK94jch2xtOry
-VITE_VIDEO_AUDIO_API_KEY = sk_V2_hgu_ksRYjPqUrxn_zU353GkXekSxzFdxYvOiWCdBoq4YTGuf
-VITE_ELEVENLABS_API_KEY = sk_d13972d86023d84f0dd40970abc9ddee2ab8c1007f43808a
-VITE_PIXABAY_API_KEY = 55872416-c3b7dd3f8f6a796373a277919
-FRONTEND_URL = https://your-project.vercel.app
+GEMINI_API_KEY = <set as a server-side secret>
+GEMINI_API_KEY_2 = <set as a server-side secret>
+GEMINI_API_KEY_3 = <set as a server-side secret>
+GEMINI_API_KEY_4 = <set as a server-side secret>
+GEMINI_API_KEY_5 = <set as a server-side secret>
+GEMINI_API_KEY_6 = <set as a server-side secret>
+OPENAI_API_KEY = <set as a server-side secret>
+GROQ_API_KEY = <set as a server-side secret>
+UNSPLASH_ACCESS_KEY = <set as a server-side secret>
+PEXELS_API_KEY = <set as a server-side secret>
+VIDEO_AUDIO_API_KEY = <set as a server-side secret>
+ELEVENLABS_API_KEY = <set as a server-side secret>
+PIXABAY_API_KEY = <set as a server-side secret>
 ```
 
 > **Important:** Update `VITE_API_BASE_URL` with your Railway backend URL + `/api` (e.g., `https://your-backend.railway.app/api`). This will be set after Step 3.
@@ -91,25 +90,27 @@ https://your-project.vercel.app
 In Railway → Your Project → **Variables**, add:
 
 ```
-MONGODB_URI = mongodb://ullasmahesh21_db_user:6Amns8FjGvoT3Fld@ac-fw9iegd-shard-00-02.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-00.azydkb8.mongodb.net:27017,ac-fw9iegd-shard-00-01.azydkb8.mongodb.net:27017/artisan-workshop?ssl=true&authSource=admin&replicaSet=atlas-7o49gd-shard-0
-VITE_GEMINI_API_KEY = AIzaSyBUYaS-q-M2XEalrr-aCKkYPjSNpEsQp8A
-VITE_GEMINI_API_KEY_2 = AIzaSyAII6s8kIIRsXmbXoFXIvX-FELdLW4qNIo
-VITE_GEMINI_API_KEY_3 = AIzaSyA45IQNuobwkUQQCu4UIw-_Q8RCDBMoWIw
-VITE_GEMINI_API_KEY_4 = AIzaSyC9dwjzfjZnpniP1bmdfaGCIC3S8ifXgK8
-VITE_GEMINI_API_KEY_5 = AIzaSyB_aXmKX_5o4YzI4g5RVZqTCQx10DE1ME8
-VITE_GEMINI_API_KEY_6 = AIzaSyCEg4HlVe3XgkCbwH1J1UAuijAXe6RzvrM
-VITE_OPENAI_API_KEY = sk-proj-...
-VITE_GROQ_API_KEY = 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
-VITE_UNSPLASH_ACCESS_KEY = oBCVbi9xNT93ZzLI6QmefPEJ1ArzXpdcvbEGVm0S2_E
-VITE_PEXELS_API_KEY = hfL5jQK7KBVGq5e7PFHS8D835b3dRgucdTDLyOZ6ZgGXK94jch2xtOry
+MONGODB_URI = <set your database connection string in the backend environment>
+PUBLIC_API_URL = https://your-backend.railway.app
+FRONTEND_URL = https://your-project.vercel.app
+GEMINI_API_KEY = <set as a server-side secret>
+GEMINI_API_KEY_2 = <set as a server-side secret>
+GEMINI_API_KEY_3 = <set as a server-side secret>
+GEMINI_API_KEY_4 = <set as a server-side secret>
+GEMINI_API_KEY_5 = <set as a server-side secret>
+GEMINI_API_KEY_6 = <set as a server-side secret>
+OPENAI_API_KEY = sk-proj-...
+GROQ_API_KEY = <set as a server-side secret>
+UNSPLASH_ACCESS_KEY = <set as a server-side secret>
+PEXELS_API_KEY = <set as a server-side secret>
 SMTP_HOST = smtp.gmail.com
 SMTP_PORT = 465
 SMTP_USER = pc0050272005@gmail.com
-SMTP_PASS = eiwg ekpp chbh syii
+SMTP_PASS = <set through secret environment variables>
 FRONTEND_URL = https://your-project.vercel.app
-VITE_VIDEO_AUDIO_API_KEY = sk_V2_hgu_ksRYjPqUrxn_zU353GkXekSxzFdxYvOiWCdBoq4YTGuf
-VITE_ELEVENLABS_API_KEY = sk_d13972d86023d84f0dd40970abc9ddee2ab8c1007f43808a
-VITE_PIXABAY_API_KEY = 55872416-c3b7dd3f8f6a796373a277919
+VIDEO_AUDIO_API_KEY = <set as a server-side secret>
+ELEVENLABS_API_KEY = <set as a server-side secret>
+PIXABAY_API_KEY = <set as a server-side secret>
 ```
 
 ### 3.4 Get Backend URL

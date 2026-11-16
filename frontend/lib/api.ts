@@ -12,7 +12,6 @@ const API_BASE_URL = (((import.meta as any).env?.VITE_API_BASE_URL as string)?.t
  * @param options Fetch init options
  */
 export async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
-  const uid = localStorage.getItem('artisan_user_id') || '';
   const normalizedEndpoint = endpoint.replace(/^\/+/, "");
   const url = `${API_BASE_URL}/${normalizedEndpoint}`;
 
@@ -20,9 +19,8 @@ export async function request(endpoint: string, options: RequestInit = {}): Prom
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-  if (uid) headers['x-user-id'] = uid;
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers, credentials: 'include' });
 
   if (!response.ok) {
     let body = "";
@@ -32,18 +30,7 @@ export async function request(endpoint: string, options: RequestInit = {}): Prom
   return response.json();
 }
 
-// -------------------------------------------------------------------
-// Mock user – used for local dev when no real auth is set up.
-// -------------------------------------------------------------------
-const mockUser = {
-  uid: 'local-user-id',
-  email: 'local@artisan.workshop',
-  displayName: 'Local Artisan',
-  role: 'admin',
-  avatarUrl: ''
-};
-
-export const auth = { currentUser: mockUser };
+export const auth = { currentUser: null };
 export const db = {};
 export function normalizeData(data: any): any { return data; }
 
@@ -51,16 +38,10 @@ export const api = {
   // Auth
   auth: {
     me: async () => request('/auth/me'),
-    login: async (data: any) => {
-      const user = await request('/auth/login', { method: 'POST', body: JSON.stringify(data) });
-      localStorage.setItem('artisan_user_id', user.uid);
-      return user;
-    },
-    loginWithGoogle: async (authCode: string, role?: string) => {
-      const user = await request('/auth/google', { method: 'POST', body: JSON.stringify({ code: authCode, role }) });
-      localStorage.setItem('artisan_user_id', user.uid);
-      return user;
-    }
+    login: async (data: any) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+    register: async (data: any) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    logout: async () => request('/auth/logout', { method: 'POST' }),
+    loginWithGoogle: async (authCode: string) => request('/auth/google', { method: 'POST', body: JSON.stringify({ code: authCode }) })
   },
   // AI helpers (unchanged)
   ai: {
@@ -87,7 +68,6 @@ export const api = {
     list: async () => request('/media'),
     update: async (id: string, data: any) => request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     upload: async (file: File) => {
-      const uid = localStorage.getItem('artisan_user_id') || mockUser.uid;
       const reader = new FileReader();
       const dataUrl = await new Promise<string>(resolve => { reader.onload = () => resolve(reader.result as string); reader.readAsDataURL(file); });
       const fileNameLower = file.name.toLowerCase();
@@ -98,7 +78,7 @@ export const api = {
       else if (isAudioExt || file.type.startsWith('audio/')) detectedType = 'audio';
       else if (isVideoExt || file.type.startsWith('video/')) detectedType = 'video';
       else if (file.type.includes('pdf') || file.type.includes('epub') || fileNameLower.endsWith('.pdf')) detectedType = 'ebook';
-      return request('/media', { method: 'POST', body: JSON.stringify({ name: file.name, type: detectedType, url: dataUrl, size: (file.size / 1024).toFixed(1) + ' KB', sizeBytes: file.size, ownerId: uid }) });
+      return request('/media', { method: 'POST', body: JSON.stringify({ name: file.name, type: detectedType, url: dataUrl, size: (file.size / 1024).toFixed(1) + ' KB', sizeBytes: file.size }) });
     },
     saveReference: async (data: any) => request('/media', { method: 'POST', body: JSON.stringify(data) }),
     rehost: async (data: { url: string; name?: string }) => request('/proxy-image', { method: 'POST', body: JSON.stringify(data) }),
@@ -161,5 +141,12 @@ export const api = {
   feedback: {
     send: async (data: any) => request('/feedback', { method: 'POST', body: JSON.stringify(data) }),
     list: async () => request('/feedback')
+  },
+  adminLogs: {
+    list: async () => request('/admin-logs'),
+    record: async (action: string, detail: string) => request('/admin-logs', { method: 'POST', body: JSON.stringify({ action, detail }) })
+  },
+  system: {
+    seed: async () => request('/system/seed', { method: 'POST' })
   }
 };
