@@ -17,7 +17,10 @@ export default defineConfig(({mode}) => {
     },
     server: {
       host: '0.0.0.0',
-      allowedHosts: (env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean),
+      allowedHosts: [
+        ...(env.VITE_ALLOWED_HOSTS || '').split(',').map((host) => host.trim()).filter(Boolean),
+        'sb-4w9tr43ot5es.vercel.run',
+      ],
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
