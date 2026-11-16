@@ -67,19 +67,8 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [showSuccess, countdown, navigate]);
 
-  if (loading) return null;
-  if (user && !showSuccess && !showRolePicker) return <Navigate to="/dashboard" />;
-
-  const checkAndShowRolePicker = (loggedInUser: any) => {
-    const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
-    const hasChosenRole = ['editor', 'author'].includes(loggedInUser?.role);
-    if (isAdmin || hasChosenRole) {
-      setShowSuccess(true);
-      return;
-    }
-    setPendingUser(loggedInUser);
-    setShowRolePicker(true);
-    setIsLoggingIn(false);
+  const checkAndShowRolePicker = (_loggedInUser: any) => {
+    setShowSuccess(true);
   };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -94,7 +83,7 @@ export default function Login() {
       const loggedInUser = await login({ email, password });
       
       const digitalResilience = localStorage.getItem('digitalResilience') !== 'false';
-      const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
+      const isAdmin = loggedInUser?.role === 'admin';
       
       if (!digitalResilience && !isAdmin) {
         logout();
@@ -120,7 +109,7 @@ export default function Login() {
         const loggedInUser = await loginWithGoogle(codeResponse.code);
         
         const digitalResilience = localStorage.getItem('digitalResilience') !== 'false';
-        const isAdmin = loggedInUser?.role === 'admin' || ['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(loggedInUser?.email);
+      const isAdmin = loggedInUser?.role === 'admin';
         
         if (!digitalResilience && !isAdmin) {
           logout();
@@ -158,6 +147,9 @@ export default function Login() {
       setShowSuccess(true);
     }
   };
+
+  if (loading) return null;
+  if (user && !showSuccess && !showRolePicker) return <Navigate to="/dashboard" />;
 
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center p-6 selection:bg-emerald-100 dark:selection:bg-emerald-900 selection:text-emerald-900 dark:selection:text-emerald-100 transition-colors duration-300">

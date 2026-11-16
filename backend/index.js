@@ -12,28 +12,34 @@ import nodemailer from 'nodemailer';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { OAuth2Client } from 'google-auth-library';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
+import { del, get, head, put } from '@vercel/blob';
+import { handleUpload } from '@vercel/blob/client';
+import { lookup } from 'dns/promises';
+import { BlockList, isIP } from 'net';
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import { Groq } from 'groq-sdk';
 
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), './.env.local') });
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), './.env.development.local') });
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env.development.local') });
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || process.env.PORT || 5000;
 
 const serverGeminiApiKeys = [
-  process.env.VITE_GEMINI_API_KEY,
-  process.env.VITE_GEMINI_API_KEY_2,
-  process.env.VITE_GEMINI_API_KEY_3,
-  process.env.VITE_GEMINI_API_KEY_4,
-  process.env.VITE_GEMINI_API_KEY_5,
-  process.env.VITE_GEMINI_API_KEY_6,
+  process.env.GEMINI_API_KEY,
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3,
+  process.env.GEMINI_API_KEY_4,
+  process.env.GEMINI_API_KEY_5,
+  process.env.GEMINI_API_KEY_6,
   process.env.GEMINI_API_KEY
 ].filter(Boolean);
 const serverGeminiApiKey = serverGeminiApiKeys[serverGeminiApiKeys.length - 1] || '';
-const serverOpenAIKey = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '';
-const serverGroqKey = process.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || '';
+const serverOpenAIKey = process.env.OPENAI_API_KEY || '';
+const serverGroqKey = process.env.GROQ_API_KEY || '';
 
 const serverAi = serverGeminiApiKey ? new GoogleGenAI({ apiKey: serverGeminiApiKey }) : null;
 const serverOpenai = serverOpenAIKey ? new OpenAI({ apiKey: serverOpenAIKey }) : null;
@@ -45,13 +51,73 @@ const oauth2Client = new OAuth2Client(
   'postmessage'
 );
 
-app.use(cors());
-app.use(express.json({ limit: '1024mb' }));
-app.use(express.urlencoded({ limit: '1024mb', extended: true }));
+const configuredOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = [...new Set([...configuredOrigins, 'http://localhost:5173', 'http://127.0.0.1:5173'])];
+const isTrustedOrigin = (req) => {
+  const origin = req.get('origin');
+  return !origin || allowedOrigins.includes(origin) || origin === `${req.protocol}://${req.get('host')}`;
+};
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '12mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
+
+const blockedAddresses = new BlockList();
+[
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.168.0.0', 16],
+  ['198.18.0.0', 15], ['224.0.0.0', 4], ['240.0.0.0', 4],
+  ['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8], ['::ffff:0:0', 96]
+].forEach(([address, prefix]) => blockedAddresses.addSubnet(address, prefix, address.includes(':') ? 'ipv6' : 'ipv4'));
+
+async function fetchPublicHttps(rawUrl) {
+  const target = new URL(rawUrl);
+  if (target.protocol !== 'https:' || target.username || target.password) {
+    throw new Error('Only public HTTPS image URLs are allowed.');
+  }
+  const host = target.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) {
+    throw new Error('Private network hosts are not allowed.');
+  }
+  const addresses = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address, family }) => blockedAddresses.check(address, family === 6 ? 'ipv6' : 'ipv4'))) {
+    throw new Error('Private or reserved network addresses are not allowed.');
+  }
+  return fetch(target, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+}
+
+async function readLimitedBody(response, maximumBytes = 8 * 1024 * 1024) {
+  const declaredSize = Number(response.headers.get('content-length') || 0);
+  if (declaredSize > maximumBytes) throw new Error('Remote file exceeds the allowed size.');
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Remote response had no body.');
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maximumBytes) {
+      await reader.cancel();
+      throw new Error('Remote file exceeds the allowed size.');
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total);
+}
 
 async function analyzeImageVision(base64Data, mimeType, prompt) {
   if (!serverAi && !serverOpenai && !serverGroq) {
-    throw new Error('No AI vision provider configured on the server. Please add VITE_GEMINI_API_KEY, VITE_OPENAI_API_KEY, or VITE_GROQ_API_KEY.');
+    throw new Error('No AI vision provider configured on the server. Please add GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.');
   }
 
   const textFromResponse = (response) => {
@@ -143,7 +209,7 @@ async function analyzeImageVision(base64Data, mimeType, prompt) {
 
 async function generateServerContent(prompt, systemInstruction) {
   if (!serverAi && !serverOpenai && !serverGroq) {
-    throw new Error('No AI content provider configured on the server. Add VITE_GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.');
+    throw new Error('No AI content provider configured on the server. Add GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.');
   }
 
   const parseText = (response) => {
@@ -255,7 +321,7 @@ async function generateServerImage(prompt) {
 }
 
 async function generateServerAudio(prompt) {
-  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.VITE_ELEVENLABS_API_KEY || process.env.VITE_VIDEO_AUDIO_API_KEY;
+  const apiKey = process.env.ELEVENLABS_API_KEY || process.env.VIDEO_AUDIO_API_KEY;
   if (!apiKey) {
     throw new Error('No ElevenLabs API key configured on the server.');
   }
@@ -282,9 +348,7 @@ async function generateServerAudio(prompt) {
 }
 
 const uploadDir = join(dirname(fileURLToPath(import.meta.url)), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+app.set('trust proxy', 1);
 app.use('/uploads', express.static(uploadDir));
 
 // Request logging
@@ -294,18 +358,23 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  console.error('❌ MONGODB_URI environment variable is not set.');
+const MONGODB_URI = process.env.MONGODB_CONNECTION_STRING || process.env.MONGODB_URI;
+if (!MONGODB_URI && !process.env.VERCEL) {
+  console.error('MONGODB_CONNECTION_STRING environment variable is not set.');
   process.exit(1);
 }
 
-mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 5000 })
-  .then(() => console.log(`✅ Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Atlas'})`))
-  .catch(err => {
-    console.error('❌ MongoDB Connection Error:', err.message);
-    process.exit(1);
-  });
+export const databaseConnection = MONGODB_URI
+  ? mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 5000 }).then(() => {
+      console.log(`Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Atlas'})`);
+      return mongoose.connection;
+    })
+  : Promise.reject(new Error('MONGODB_CONNECTION_STRING environment variable is not set.'));
+
+databaseConnection.catch((error) => {
+  console.error('MongoDB connection failed:', error.message);
+  if (!process.env.VERCEL) process.exit(1);
+});
 
 // Email Transporter - robust init with Ethereal fallback for local development
 let transporter = null;
@@ -357,7 +426,13 @@ initMailer();
 
 // Test SMTP endpoint
 app.post('/api/test-smtp', async (req, res) => {
+  if (!isTrustedOrigin(req)) return res.status(403).json({ error: 'Untrusted request origin.' });
   try {
+    const tokenValue = req.headers.cookie?.match(/(?:^|;\s*)pagepilot_session=([^;]+)/)?.[1];
+    if (!tokenValue) return res.status(401).json({ error: 'Authentication required.' });
+    const session = await Session.findOne({ tokenHash: hashSessionToken(decodeURIComponent(tokenValue)), expiresAt: { $gt: new Date() } });
+    const user = session ? await User.findOne({ uid: session.userId }) : null;
+    if (user?.role !== 'admin') return res.status(403).json({ error: 'Administrator access required.' });
     if (!transporter) return res.status(500).json({ error: 'Mailer not initialized' });
     const to = req.body?.to || process.env.TEST_EMAIL_TO || process.env.SMTP_USER || 'local@localhost';
     const from = process.env.SMTP_FROM || process.env.SMTP_USER || `no-reply@localhost`;
@@ -397,6 +472,41 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
+const sessionSchema = new mongoose.Schema({
+  tokenHash: { type: String, required: true, unique: true },
+  userId: { type: String, required: true, index: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } }
+}, { timestamps: true });
+const Session = mongoose.model('Session', sessionSchema);
+
+const sessionCookieName = 'pagepilot_session';
+const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
+const hashSessionToken = (token) => createHash('sha256').update(token).digest('hex');
+const publicUser = (user) => {
+  const value = user.toObject ? user.toObject() : { ...user };
+  delete value.passwordHash;
+  return value;
+};
+
+async function createSession(user, res) {
+  const token = randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + sessionLifetimeMs);
+  await Session.create({ tokenHash: hashSessionToken(token), userId: user.uid, expiresAt });
+  res.cookie(sessionCookieName, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+    expires: expiresAt
+  });
+  return publicUser(user);
+}
+
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Administrator access required' });
+  next();
+};
+
 const notificationSchema = new mongoose.Schema({
   userId: String,
   title: String,
@@ -435,6 +545,7 @@ const mediaSchema = new mongoose.Schema({
   audioUrl: String,
   size: String,
   sizeBytes: Number,
+  storagePathname: { type: String, unique: true, sparse: true },
   ownerId: String,
   icon: String,
   color: String,
@@ -442,6 +553,50 @@ const mediaSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Media = mongoose.model('Media', mediaSchema);
+
+const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
+const mediaContentTypes = {
+  'image/jpeg': 'image',
+  'image/png': 'image',
+  'image/webp': 'image',
+  'image/gif': 'image',
+  'audio/mpeg': 'audio',
+  'audio/mp4': 'audio',
+  'audio/wav': 'audio',
+  'audio/x-wav': 'audio',
+  'audio/ogg': 'audio',
+  'audio/aac': 'audio',
+  'video/mp4': 'video',
+  'video/webm': 'video',
+  'video/quicktime': 'video',
+  'application/pdf': 'ebook',
+  'application/epub+zip': 'ebook'
+};
+const mediaFileUrl = (mediaId) => `/api/media/file/${mediaId}`;
+
+const sanitizeMediaName = (value) => String(value || 'upload').replace(/[\\/\u0000-\u001f\u007f]/g, '_').slice(0, 180);
+
+async function upsertBlobMedia({ mediaId, pathname, ownerId, name, contentType, sizeBytes }) {
+  const mediaType = mediaContentTypes[contentType];
+  if (!mediaType || !Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_MEDIA_BYTES) {
+    throw new Error('Unsupported media file.');
+  }
+  return Media.findOneAndUpdate(
+    { _id: mediaId, ownerId },
+    {
+      $set: {
+        name: sanitizeMediaName(name),
+        type: mediaType,
+        sizeBytes,
+        size: `${(sizeBytes / 1024).toFixed(1)} KB`,
+        ownerId,
+        storagePathname: pathname,
+        url: mediaFileUrl(mediaId)
+      }
+    },
+    { upsert: true, new: true, runValidators: true }
+  );
+}
 
 const siteSchema = new mongoose.Schema({
   name: String,
@@ -453,74 +608,80 @@ const siteSchema = new mongoose.Schema({
 
 const Site = mongoose.model('Site', siteSchema);
 
-// API Routes
-app.get('/api/auth/me', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  if (!uid) return res.status(401).json({ error: 'Not authenticated' });
-  const user = await User.findOne({ uid });
-  if (!user) return res.status(401).json({ error: 'User not found' });
-  res.json(user);
+// Public authentication endpoints issue opaque, HttpOnly database-backed sessions.
+app.post('/api/auth/register', async (req, res) => {
+  if (!isTrustedOrigin(req)) return res.status(403).json({ error: 'Untrusted request origin.' });
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const displayName = String(req.body.displayName || '').trim();
+    const password = String(req.body.password || '');
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+    if (password.length < 12 || password.length > 128) {
+      return res.status(400).json({ error: 'Password must be between 12 and 128 characters.' });
+    }
+    if (!displayName || displayName.length > 120) {
+      return res.status(400).json({ error: 'Enter a name no longer than 120 characters.' });
+    }
+    if (await User.exists({ email })) return res.status(409).json({ error: 'An account already exists for this email.' });
+
+    const user = await User.create({
+      uid: `user-${randomBytes(16).toString('hex')}`,
+      email,
+      displayName,
+      role: 'author',
+      passwordHash: await bcrypt.hash(password, 12)
+    });
+    res.status(201).json(await createSession(user, res));
+  } catch (error) {
+    console.error('Registration error:', error.message);
+    res.status(500).json({ error: 'Account registration failed. Please try again.' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  if (!isTrustedOrigin(req)) return res.status(403).json({ error: 'Untrusted request origin.' });
   try {
-    const { email, password } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-
-    let user = await User.findOne({ email });
-    if (!user) {
-      const passwordHash = password ? await bcrypt.hash(password, 10) : null;
-      user = await User.create({
-        uid: `user-${Date.now()}`,
-        email,
-        displayName: email.split('@')[0],
-        role: req.body.role || null,
-        passwordHash
-      });
-    } else {
-      if (password && user.passwordHash) {
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return res.status(401).json({ error: 'Invalid email or password.' });
-      } else if (password && !user.passwordHash) {
-        const passwordHash = await bcrypt.hash(password, 10);
-        user.passwordHash = passwordHash;
-        await user.save();
-      }
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
+    const user = await User.findOne({ email });
+    if (!user?.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
-    res.json(user);
-  } catch (err) {
-    console.error('Login error:', err);
+    res.json(await createSession(user, res));
+  } catch (error) {
+    console.error('Login error:', error.message);
     res.status(500).json({ error: 'Login failed. Please try again.' });
   }
 });
 
 app.post('/api/auth/google', async (req, res) => {
-  const { code } = req.body;
-  
-  if (!code) {
-    return res.status(400).json({ error: 'Auth code is required' });
-  }
-
+  if (!isTrustedOrigin(req)) return res.status(403).json({ error: 'Untrusted request origin.' });
   try {
+    const code = String(req.body.code || '');
+    if (!code) return res.status(400).json({ error: 'Auth code is required.' });
     const { tokens } = await oauth2Client.getToken(code);
     const ticket = await oauth2Client.verifyIdToken({
       idToken: tokens.id_token,
-      audience: process.env.VITE_GOOGLE_CLIENT_ID,
+      audience: process.env.VITE_GOOGLE_CLIENT_ID
     });
-    
     const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+      return res.status(401).json({ error: 'Google account email could not be verified.' });
+    }
 
-    const googleUser = {
-      uid: payload.sub,
-      email: payload.email,
-      displayName: payload.name,
-      role: null,
-      avatarUrl: payload.picture
-    };
-    
-    let user = await User.findOne({ uid: googleUser.uid });
+    const email = payload.email.toLowerCase();
+    let user = await User.findOne({ $or: [{ uid: payload.sub }, { email }] });
     if (!user) {
-      user = await User.create(googleUser);
+      user = await User.create({
+        uid: payload.sub,
+        email,
+        displayName: payload.name || email.split('@')[0],
+        role: 'author',
+        avatarUrl: payload.picture
+      });
       await Notification.create({
         userId: user.uid,
         title: 'Welcome to Page Pilot!',
@@ -529,30 +690,92 @@ app.post('/api/auth/google', async (req, res) => {
         read: false
       });
     }
-    return res.json(user);
+    res.json(await createSession(user, res));
   } catch (error) {
     console.error('Google Auth failed:', error.message);
-    return res.status(401).json({ error: 'Google authentication failed. Please try again.' });
+    res.status(401).json({ error: 'Google authentication failed. Please try again.' });
   }
 });
 
-app.get('/api/users', async (req, res) => {
-  const users = await User.find();
+app.post('/api/auth/logout', async (req, res) => {
+  if (!isTrustedOrigin(req)) return res.status(403).json({ error: 'Untrusted request origin.' });
+  const token = req.headers.cookie?.match(/(?:^|;\s*)pagepilot_session=([^;]+)/)?.[1];
+  if (token) await Session.deleteOne({ tokenHash: hashSessionToken(decodeURIComponent(token)) });
+  res.clearCookie(sessionCookieName, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/'
+  });
+  res.json({ success: true });
+});
+
+app.use('/api', async (req, res, next) => {
+  try {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !isTrustedOrigin(req)) {
+      return res.status(403).json({ error: 'Untrusted request origin.' });
+    }
+    const isPublicPublishedList = req.method === 'GET' && req.path === '/posts' && req.query.status === 'published';
+    const isPublicView = req.method === 'POST' && /^\/posts\/[^/]+\/view$/.test(req.path);
+    const isMediaFile = req.method === 'GET' && /^\/media\/file\/[a-f0-9]{24}$/i.test(req.path);
+    const isBlobUploadCallback = req.method === 'POST' && req.path === '/media/upload-token' && req.body?.type === 'blob.upload-completed';
+    if (isPublicPublishedList || isPublicView || isBlobUploadCallback) return next();
+    if (isMediaFile) {
+      const tokenValue = req.headers.cookie?.match(/(?:^|;\s*)pagepilot_session=([^;]+)/)?.[1];
+      if (tokenValue) {
+        const token = decodeURIComponent(tokenValue);
+        const session = await Session.findOne({ tokenHash: hashSessionToken(token), expiresAt: { $gt: new Date() } });
+        if (session) req.user = await User.findOne({ uid: session.userId }) || undefined;
+      }
+      return next();
+    }
+    if (req.method === 'GET' && /^\/posts\/[^/]+$/.test(req.path)) {
+      const publicPost = await Post.findOne({ slug: req.path.slice('/posts/'.length), status: 'published' });
+      if (publicPost) return next();
+    }
+
+    const tokenValue = req.headers.cookie?.match(/(?:^|;\s*)pagepilot_session=([^;]+)/)?.[1];
+    if (!tokenValue) return res.status(401).json({ error: 'Authentication required.' });
+    const token = decodeURIComponent(tokenValue);
+    const session = await Session.findOne({ tokenHash: hashSessionToken(token), expiresAt: { $gt: new Date() } });
+    if (!session) return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+    const user = await User.findOne({ uid: session.userId });
+    if (!user) return res.status(401).json({ error: 'Account not found.' });
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/auth/me', (req, res) => res.json(publicUser(req.user)));
+
+app.get('/api/users', requireAdmin, async (req, res) => {
+  const users = await User.find().select('-passwordHash');
   res.json(users);
 });
 
 app.patch('/api/users/:id', async (req, res) => {
-  const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const isAdmin = req.user.role === 'admin';
+  if (!isAdmin && String(req.user._id) !== req.params.id) {
+    return res.status(403).json({ error: 'You may only update your own profile.' });
+  }
+  const allowedFields = ['displayName', 'avatarUrl', 'bio', 'jobTitle', 'location', 'occupation', 'website', 'notificationToggles', 'plugins', 'recentHistory'];
+  if (isAdmin) allowedFields.push('role');
+  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedFields.includes(key)));
+  if (!Object.keys(updates).length) return res.status(400).json({ error: 'No permitted profile fields provided.' });
+  const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).select('-passwordHash');
+  if (!user) return res.status(404).json({ error: 'User not found.' });
   res.json(user);
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   await User.findByIdAndDelete(req.params.id);
   res.json({ success: true });
 });
 
 app.get('/api/posts', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const { status, category, limit } = req.query;
   let query = {};
   
@@ -586,7 +809,7 @@ app.get('/api/posts/:slug', async (req, res) => {
     if (!post && req.params.slug.match(/^[0-9a-fA-F]{24}$/)) {
       post = await Post.findById(req.params.slug);
     }
-    if (!post) {
+    if (!post || (post.status !== 'published' && post.authorId !== req.user.uid && req.user.role !== 'admin')) {
       return res.status(404).json({ error: 'Post not found' });
     }
     
@@ -605,8 +828,10 @@ app.get('/api/posts/:slug', async (req, res) => {
 
 app.post('/api/posts', async (req, res) => {
   try {
-    const uid = req.headers['x-user-id'];
-    const post = await Post.create({ ...req.body, authorId: uid });
+    const uid = req.user.uid;
+    const payload = { ...req.body, authorId: uid };
+    if (req.user.role !== 'admin') payload.status = 'draft';
+    const post = await Post.create(payload);
     res.json(post);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -615,11 +840,16 @@ app.post('/api/posts', async (req, res) => {
 
 app.patch('/api/posts/:id', async (req, res) => {
   try {
-    const uid = req.headers['x-user-id'];
+    const uid = req.user.uid;
     const user = await User.findOne({ uid });
     const query = user?.role === 'admin' ? { _id: req.params.id } : { _id: req.params.id, authorId: uid };
     
-    const post = await Post.findOneAndUpdate(query, req.body, { new: true });
+    const allowedFields = ['title', 'slug', 'content', 'status', 'category', 'excerpt', 'tags', 'featuredImage', 'seoTitle', 'seoDescription'];
+    const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedFields.includes(key)));
+    if (user?.role !== 'admin' && updates.status === 'published') {
+      return res.status(403).json({ error: 'Only administrators may publish posts.' });
+    }
+    const post = await Post.findOneAndUpdate(query, updates, { new: true, runValidators: true });
     if (!post) return res.status(404).json({ error: 'Post not found or unauthorized' });
     res.json(post);
   } catch (error) {
@@ -628,7 +858,7 @@ app.patch('/api/posts/:id', async (req, res) => {
 });
 
 app.delete('/api/posts/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   await Post.findOneAndDelete({ _id: req.params.id, authorId: uid });
   res.json({ success: true });
 });
@@ -636,7 +866,7 @@ app.delete('/api/posts/:id', async (req, res) => {
 app.post('/api/posts/:id/comments', async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (!post || (post.status !== 'published' && post.authorId !== req.user.uid && req.user.role !== 'admin')) return res.status(404).json({ error: 'Post not found' });
     
     const newComment = {
       _id: new mongoose.Types.ObjectId().toString(),
@@ -661,7 +891,7 @@ app.post('/api/posts/:id/comments', async (req, res) => {
 app.post('/api/posts/:id/comments/:commentId/reply', async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (!post || (post.status !== 'published' && post.authorId !== req.user.uid && req.user.role !== 'admin')) return res.status(404).json({ error: 'Post not found' });
     
     const commentIndex = post.comments.findIndex((c, idx) => 
       c._id === req.params.commentId || 
@@ -690,7 +920,7 @@ app.post('/api/posts/:id/comments/:commentId/reply', async (req, res) => {
 
 app.post('/api/posts/:id/view', async (req, res) => {
   try {
-    const post = await Post.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }, { new: true });
+    const post = await Post.findOneAndUpdate({ _id: req.params.id, status: 'published' }, { $inc: { views: 1 } }, { new: true });
     res.json({ success: true, views: post?.views });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -707,69 +937,213 @@ app.post('/api/posts/:id/time', async (req, res) => {
   }
 });
 
+app.post('/api/media/upload-token', async (req, res) => {
+  try {
+    const result = await handleUpload({
+      body: req.body,
+      request: req,
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        let metadata;
+        try {
+          metadata = JSON.parse(clientPayload || '{}');
+        } catch {
+          throw new Error('Invalid upload metadata.');
+        }
+        const mediaId = String(metadata.mediaId || '');
+        const name = sanitizeMediaName(metadata.name);
+        const contentType = String(metadata.contentType || '').toLowerCase();
+        const ownerPrefix = `users/${encodeURIComponent(req.user.uid)}/${mediaId}/`;
+        if (!/^[a-f0-9]{24}$/i.test(mediaId) || !mediaContentTypes[contentType] ||
+          !Number.isInteger(metadata.sizeBytes) || metadata.sizeBytes < 1 || metadata.sizeBytes > MAX_MEDIA_BYTES ||
+          pathname !== `${ownerPrefix}${name}`) {
+          throw new Error('Upload metadata is not allowed.');
+        }
+        return {
+          allowedContentTypes: [contentType],
+          maximumSizeInBytes: MAX_MEDIA_BYTES,
+          addRandomSuffix: false,
+          tokenPayload: JSON.stringify({ mediaId, ownerId: req.user.uid, name })
+        };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const metadata = JSON.parse(tokenPayload || '{}');
+        const ownerPrefix = `users/${encodeURIComponent(metadata.ownerId || '')}/${metadata.mediaId}/`;
+        if (!metadata.ownerId || !/^[a-f0-9]{24}$/i.test(metadata.mediaId || '') || !blob.pathname.startsWith(ownerPrefix)) {
+          throw new Error('Upload owner verification failed.');
+        }
+        await upsertBlobMedia({
+          mediaId: metadata.mediaId,
+          pathname: blob.pathname,
+          ownerId: metadata.ownerId,
+          name: metadata.name,
+          contentType: blob.contentType,
+          sizeBytes: blob.size
+        });
+      }
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Blob upload authorization failed:', error.message);
+    res.status(400).json({ error: 'Unable to authorize media upload.' });
+  }
+});
+
+app.post('/api/media/complete', async (req, res) => {
+  try {
+    const mediaId = String(req.body.mediaId || '');
+    const pathname = String(req.body.pathname || '');
+    const ownerId = req.user.uid;
+    const ownerPrefix = `users/${encodeURIComponent(ownerId)}/${mediaId}/`;
+    if (!/^[a-f0-9]{24}$/i.test(mediaId) || !pathname.startsWith(ownerPrefix)) {
+      return res.status(403).json({ error: 'Upload does not belong to this account.' });
+    }
+
+    const blob = await head(pathname, { access: 'private' });
+    if (!blob || blob.size > MAX_MEDIA_BYTES || !mediaContentTypes[blob.contentType]) {
+      return res.status(415).json({ error: 'Uploaded media type or size is not supported.' });
+    }
+    const item = await upsertBlobMedia({
+      mediaId,
+      pathname,
+      ownerId,
+      name: req.body.name,
+      contentType: blob.contentType,
+      sizeBytes: blob.size
+    });
+    res.status(201).json(item);
+  } catch (error) {
+    console.error('Blob upload completion failed:', error.message);
+    res.status(400).json({ error: 'Unable to finalize media upload.' });
+  }
+});
+
+app.get('/api/media/file/:id', async (req, res) => {
+  try {
+    const media = await Media.findById(req.params.id);
+    if (!media?.storagePathname) return res.status(404).json({ error: 'File not found.' });
+
+    const isOwner = req.user?.uid === media.ownerId;
+    const isPublished = !isOwner && await Post.exists({
+      status: 'published',
+      $or: [
+        { featuredImage: media.url },
+        { content: { $regex: media._id.toString() } }
+      ]
+    });
+    if (!isOwner && !isPublished) return res.status(404).json({ error: 'File not found.' });
+
+    const blob = await get(media.storagePathname, {
+      access: 'private',
+      ifNoneMatch: req.get('if-none-match') || undefined
+    });
+    if (blob.statusCode === 304) {
+      return res.status(304).set({ ETag: blob.blob.etag, 'Cache-Control': 'private, no-cache' }).end();
+    }
+    const buffer = Buffer.from(await new Response(blob.stream).arrayBuffer());
+    res.set({
+      'Content-Type': blob.blob.contentType,
+      'Content-Length': String(buffer.length),
+      'Content-Disposition': 'inline',
+      'X-Content-Type-Options': 'nosniff',
+      ETag: blob.blob.etag,
+      'Cache-Control': 'private, no-cache'
+    });
+    res.send(buffer);
+  } catch (error) {
+    console.error('Blob file delivery failed:', error.message);
+    res.status(404).json({ error: 'File not found.' });
+  }
+});
+
 app.get('/api/media', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const media = await Media.find({ ownerId: uid }).sort({ createdAt: -1 });
   res.json(media);
 });
 
 app.post('/api/media', async (req, res) => {
   try {
-    const uid = req.headers['x-user-id'];
-    let payload = { ...req.body, ownerId: uid };
-    
-    if (payload.url && payload.url.startsWith('data:')) {
-      const matches = payload.url.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1].split('/')[1] || 'bin';
-        if (ext === 'mpeg' || ext === 'mpga') ext = 'mp3';
-        const buffer = Buffer.from(matches[2], 'base64');
-        const filename = `${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
-        const filepath = join(uploadDir, filename);
-        fs.writeFileSync(filepath, buffer);
-        payload.url = `http://localhost:${PORT}/uploads/${filename}`;
-      }
+    const ownerId = req.user.uid;
+    const name = sanitizeMediaName(req.body.name);
+    const url = req.body.url;
+    if (typeof url !== 'string' || url.length > 4096) return res.status(400).json({ error: 'A valid media URL is required.' });
+
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:([A-Za-z0-9.+-]+\/[A-Za-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i);
+      const contentType = match?.[1].toLowerCase();
+      if (!match || !mediaContentTypes[contentType]) return res.status(415).json({ error: 'Unsupported media type.' });
+      const buffer = Buffer.from(match[2], 'base64');
+      if (!buffer.length || buffer.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'Inline media must be 3 MB or smaller; use the upload flow for files.' });
+      const mediaId = new mongoose.Types.ObjectId().toString();
+      const pathname = `users/${encodeURIComponent(ownerId)}/${mediaId}/${name}`;
+      await put(pathname, buffer, { access: 'private', contentType, addRandomSuffix: false });
+      const item = await upsertBlobMedia({ mediaId, pathname, ownerId, name, contentType, sizeBytes: buffer.length });
+      return res.status(201).json(item);
     }
-    
-    const item = await Media.create(payload);
-    res.json(item);
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      if (!/^\/api\/media\/file\/[a-f0-9]{24}$/i.test(url)) return res.status(400).json({ error: 'Invalid media URL.' });
+    }
+    if (parsedUrl && !['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return res.status(400).json({ error: 'Media URL must use HTTP or HTTPS.' });
+    }
+
+    const item = await Media.create({
+      name,
+      type: String(req.body.type || 'other'),
+      url,
+      size: String(req.body.size || ''),
+      sizeBytes: Number.isFinite(Number(req.body.sizeBytes)) ? Number(req.body.sizeBytes) : undefined,
+      audioUrl: typeof req.body.audioUrl === 'string' ? req.body.audioUrl : undefined,
+      ownerId,
+      tags: Array.isArray(req.body.tags) ? req.body.tags.slice(0, 30).map((tag) => String(tag).slice(0, 80)) : []
+    });
+    res.status(201).json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Media save failed:', error.message);
+    res.status(500).json({ error: 'Unable to save media.' });
   }
 });
 
 app.patch('/api/media/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const item = await Media.findOneAndUpdate({ _id: req.params.id, ownerId: uid }, req.body, { new: true });
+  const uid = req.user.uid;
+  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => ['name', 'type', 'size', 'icon', 'color', 'tags'].includes(key)));
+  const item = await Media.findOneAndUpdate({ _id: req.params.id, ownerId: uid }, updates, { new: true });
   res.json(item);
 });
 
 app.delete('/api/media/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  await Media.findOneAndDelete({ _id: req.params.id, ownerId: uid });
+  const media = await Media.findOne({ _id: req.params.id, ownerId: req.user.uid });
+  if (!media) return res.status(404).json({ error: 'Media item not found.' });
+  if (media.storagePathname) await del(media.storagePathname);
+  await media.deleteOne();
   res.json({ success: true });
 });
 
 app.get('/api/sites', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const sites = await Site.find({ userId: uid }).sort({ updatedAt: -1 });
   res.json(sites);
 });
 
 app.post('/api/sites', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const site = await Site.create({ ...req.body, userId: uid });
   res.json(site);
 });
 
 app.patch('/api/sites/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const site = await Site.findOneAndUpdate({ _id: req.params.id, userId: uid }, req.body, { new: true });
+  const uid = req.user.uid;
+  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => ['name', 'goal', 'sections', 'style'].includes(key)));
+  const site = await Site.findOneAndUpdate({ _id: req.params.id, userId: uid }, updates, { new: true });
   res.json(site);
 });
 
 app.delete('/api/sites/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   await Site.findOneAndDelete({ _id: req.params.id, userId: uid });
   res.json({ success: true });
 });
@@ -792,7 +1166,7 @@ const settingSchema = new mongoose.Schema({
 const Setting = mongoose.model('Setting', settingSchema);
 
 app.get('/api/settings', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   let settings = await Setting.findOne({ userId: uid });
   if (!settings) {
     settings = await Setting.create({ siteName: 'Page Pilot', userId: uid });
@@ -801,8 +1175,10 @@ app.get('/api/settings', async (req, res) => {
 });
 
 app.patch('/api/settings', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const settings = await Setting.findOneAndUpdate({ userId: uid }, req.body, { new: true, upsert: true });
+  const uid = req.user.uid;
+  const allowedFields = ['siteName', 'siteDescription', 'theme', 'languages', 'timezone', 'primaryColor', 'accentColor', 'aiProvider', 'notificationToggles', 'pricingPlans'];
+  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => allowedFields.includes(key)));
+  const settings = await Setting.findOneAndUpdate({ userId: uid }, updates, { new: true, upsert: true });
   res.json(settings);
 });
 
@@ -834,7 +1210,7 @@ const invitationSchema = new mongoose.Schema({
 const Invitation = mongoose.model('Invitation', invitationSchema);
 
 // Invitation endpoint
-app.post('/api/invitations', async (req, res) => {
+app.post('/api/invitations', requireAdmin, async (req, res) => {
   try {
     const { email, role = 'author', siteName = '' } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -862,25 +1238,26 @@ app.post('/api/invitations', async (req, res) => {
 });
 
 app.get('/api/orders', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const orders = await Order.find({ userId: uid }).sort({ createdAt: -1 });
   res.json(orders);
 });
 
 app.post('/api/orders', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const order = await Order.create({ ...req.body, userId: uid });
   res.json(order);
 });
 
 app.patch('/api/orders/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const order = await Order.findOneAndUpdate({ _id: req.params.id, userId: uid }, req.body, { new: true });
+  const uid = req.user.uid;
+  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => ['customerName', 'customerEmail', 'shippingAddress', 'items', 'total', 'status'].includes(key)));
+  const order = await Order.findOneAndUpdate({ _id: req.params.id, userId: uid }, updates, { new: true });
   res.json(order);
 });
 
 app.delete('/api/orders', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   await Order.deleteMany({ userId: uid });
   res.json({ success: true });
 });
@@ -897,7 +1274,7 @@ const feedbackSchema = new mongoose.Schema({
 const Feedback = mongoose.model('Feedback', feedbackSchema);
 
 app.get('/api/feedback', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const user = await User.findOne({ uid });
   
   let query = {};
@@ -910,7 +1287,7 @@ app.get('/api/feedback', async (req, res) => {
 });
 
 app.post('/api/feedback', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const user = await User.findOne({ uid });
   const feedback = await Feedback.create({ 
     ...req.body, 
@@ -931,15 +1308,15 @@ const adminLogSchema = new mongoose.Schema({
 
 const AdminLog = mongoose.model('AdminLog', adminLogSchema);
 
-app.get('/api/admin-logs', async (req, res) => {
+app.get('/api/admin-logs', requireAdmin, async (req, res) => {
   try {
     const logs = await AdminLog.find({}).sort({ createdAt: -1 }).limit(100);
     const uids = [...new Set(logs.map(l => l.adminId).filter(Boolean))];
-    const users = await User.find({ firebaseUid: { $in: uids } });
+    const users = await User.find({ uid: { $in: uids } }).select('uid email displayName');
     
     const userMap = {};
     users.forEach(u => {
-      userMap[u.firebaseUid] = u;
+      userMap[u.uid] = u;
     });
 
     const populatedLogs = logs.map(log => {
@@ -957,14 +1334,13 @@ app.get('/api/admin-logs', async (req, res) => {
   }
 });
 
-app.post('/api/admin-logs', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const user = await User.findOne({ firebaseUid: uid });
-  const log = await AdminLog.create({ 
-    ...req.body, 
-    adminId: uid,
-    adminEmail: user ? user.email : 'Unknown',
-    adminName: user ? user.displayName : 'Admin'
+app.post('/api/admin-logs', requireAdmin, async (req, res) => {
+  const log = await AdminLog.create({
+    action: String(req.body.action || '').slice(0, 120),
+    detail: String(req.body.detail || '').slice(0, 2000),
+    adminId: req.user.uid,
+    adminEmail: req.user.email,
+    adminName: req.user.displayName
   });
   res.json(log);
 });
@@ -985,31 +1361,32 @@ const productSchema = new mongoose.Schema({
 const Product = mongoose.model('Product', productSchema);
 
 app.get('/api/products', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const products = await Product.find({ userId: uid }).sort({ createdAt: -1 });
   res.json(products);
 });
 
 app.post('/api/products', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const product = await Product.create({ ...req.body, userId: uid });
   res.json(product);
 });
 
 app.patch('/api/products/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
-  const product = await Product.findOneAndUpdate({ _id: req.params.id, userId: uid }, req.body, { new: true });
+  const uid = req.user.uid;
+  const updates = Object.fromEntries(Object.entries(req.body || {}).filter(([key]) => ['name', 'price', 'stock', 'category', 'status', 'images', 'description', 'imageUrl'].includes(key)));
+  const product = await Product.findOneAndUpdate({ _id: req.params.id, userId: uid }, updates, { new: true });
   res.json(product);
 });
 
 app.delete('/api/products/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   await Product.findOneAndDelete({ _id: req.params.id, userId: uid });
   res.json({ success: true });
 });
 
 app.delete('/api/products', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   await Product.deleteMany({ userId: uid });
   res.json({ success: true });
 });
@@ -1018,31 +1395,26 @@ app.delete('/api/products', async (req, res) => {
 app.post('/api/proxy-image', async (req, res) => {
   try {
     const { url, name } = req.body;
-    if (!url) return res.status(400).json({ error: 'Missing url' });
+    if (typeof url !== 'string' || url.length > 2048) return res.status(400).json({ error: 'A valid image URL is required.' });
 
-    // Fetch remote image server-side
-    const response = await fetch(url);
-    if (!response.ok) return res.status(502).json({ error: 'Failed to fetch remote image' });
-
-    const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    const ext = (contentType.split('/')[1] || 'bin').split(';')[0];
-    const filename = `${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
-    const filepath = join(uploadDir, filename);
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(filepath, buffer);
-
-    const fileUrl = `http://localhost:${PORT}/uploads/${filename}`;
-
-    // Create a Media item tied to the requesting user
-    const uid = req.headers['x-user-id'] || 'local-user-id';
-    const item = await Media.create({
+    const response = await fetchPublicHttps(url);
+    if (!response.ok) return res.status(502).json({ error: 'Failed to fetch remote image.' });
+    const contentType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+    if (!extensions[contentType]) return res.status(415).json({ error: 'Only JPEG, PNG, WebP, and GIF images are supported.' });
+    const filename = `${Date.now()}-${randomBytes(8).toString('hex')}.${extensions[contentType]}`;
+    const ownerId = req.user.uid;
+    const mediaId = new mongoose.Types.ObjectId().toString();
+    const pathname = `users/${encodeURIComponent(ownerId)}/${mediaId}/${filename}`;
+    const buffer = await readLimitedBody(response);
+    await put(pathname, buffer, { access: 'private', contentType, addRandomSuffix: false });
+    const item = await upsertBlobMedia({
+      mediaId,
+      pathname,
+      ownerId,
       name: name || filename,
-      type: 'image',
-      url: fileUrl,
-      size: `${Math.round(buffer.length / 1024)} KB`,
-      sizeBytes: buffer.length,
-      ownerId: uid
+      contentType,
+      sizeBytes: buffer.length
     });
 
     res.json(item);
@@ -1068,20 +1440,20 @@ app.post('/api/vision-tags', async (req, res) => {
       }
 
       if (url.startsWith('data:')) {
-        const matches = url.match(/^data:(.+);base64,(.+)$/);
-        if (!matches) {
-          return res.status(400).json({ error: 'Invalid data URL' });
+        const matches = url.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/i);
+        if (!matches || Buffer.byteLength(matches[2], 'base64') > 8 * 1024 * 1024) {
+          return res.status(400).json({ error: 'Provide a supported image under 8 MB.' });
         }
-        effectiveMimeType = matches[1];
+        effectiveMimeType = matches[1].toLowerCase();
         imageBase64 = matches[2];
       } else {
-        const response = await fetch(url);
-        if (!response.ok) {
-          return res.status(502).json({ error: `Failed to fetch remote image: ${response.statusText}` });
+        const response = await fetchPublicHttps(url);
+        if (!response.ok) return res.status(502).json({ error: 'Failed to fetch remote image.' });
+        effectiveMimeType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(effectiveMimeType)) {
+          return res.status(415).json({ error: 'Remote URL must return a supported image.' });
         }
-        effectiveMimeType = response.headers.get('content-type') || effectiveMimeType;
-        const buffer = Buffer.from(await response.arrayBuffer());
-        imageBase64 = buffer.toString('base64');
+        imageBase64 = (await readLimitedBody(response)).toString('base64');
       }
     }
 
@@ -1145,7 +1517,7 @@ app.get('/api/media/stock-search', async (req, res) => {
     }
 
     if (type === 'photos') {
-      const key = process.env.VITE_UNSPLASH_ACCESS_KEY;
+      const key = process.env.UNSPLASH_ACCESS_KEY;
       if (!key) return res.status(500).json({ error: 'Unsplash access key not configured' });
       const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=12`, {
         headers: { Authorization: `Client-ID ${key}` }
@@ -1155,7 +1527,7 @@ app.get('/api/media/stock-search', async (req, res) => {
     }
 
     if (type === 'videos') {
-      const key = process.env.VITE_PEXELS_API_KEY;
+      const key = process.env.PEXELS_API_KEY;
       if (!key) return res.status(500).json({ error: 'Pexels API key not configured' });
       const response = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=12`, {
         headers: { Authorization: key }
@@ -1165,7 +1537,7 @@ app.get('/api/media/stock-search', async (req, res) => {
     }
 
     if (type === 'audio') {
-      const key = process.env.VITE_PIXABAY_API_KEY;
+      const key = process.env.PIXABAY_API_KEY;
       if (!key) return res.status(500).json({ error: 'Pixabay API key not configured' });
       const response = await fetch(`https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(query)}&per_page=12`);
       const data = await response.json();
@@ -1193,13 +1565,13 @@ const themeSchema = new mongoose.Schema({
 const Theme = mongoose.model('Theme', themeSchema);
 
 app.get('/api/themes', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   const themes = await Theme.find({ userId: uid }).sort({ createdAt: -1 });
   res.json(themes);
 });
 
 app.post('/api/themes', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   try {
     const theme = new Theme({ ...req.body, userId: uid });
     await theme.save();
@@ -1210,7 +1582,7 @@ app.post('/api/themes', async (req, res) => {
 });
 
 app.delete('/api/themes/:id', async (req, res) => {
-  const uid = req.headers['x-user-id'];
+  const uid = req.user.uid;
   try {
     const theme = await Theme.findOneAndDelete({ _id: req.params.id, userId: uid });
     if (!theme) return res.status(404).json({ error: 'Theme not found' });
@@ -1221,7 +1593,7 @@ app.delete('/api/themes/:id', async (req, res) => {
 });
 
 // Invitations
-app.post('/api/invitations', async (req, res) => {
+app.post('/api/invitations', requireAdmin, async (req, res) => {
   const { email, role, siteName } = req.body;
   
   if (!email) {
@@ -1261,7 +1633,7 @@ app.post('/api/invitations', async (req, res) => {
 });
 
 // System Seed
-app.post('/api/system/seed', async (req, res) => {
+app.post('/api/system/seed', requireAdmin, async (req, res) => {
   // Add some sample data if needed
   res.json({ message: 'System seeded successfully' });
 });
@@ -1269,7 +1641,7 @@ app.post('/api/system/seed', async (req, res) => {
 // Notifications
 app.get('/api/notifications', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.uid;
     const filter = userId ? { userId } : {};
     let notifications = await Notification.find(filter).sort({ createdAt: -1 }).limit(50);
     // map _id to id
@@ -1288,7 +1660,7 @@ app.post('/api/notifications', async (req, res) => {
   try {
     const notification = new Notification({
       ...req.body,
-      userId: req.body.userId || req.headers['x-user-id']
+      userId: req.user.uid
     });
     const saved = await notification.save();
     const obj = saved.toObject();
@@ -1301,7 +1673,7 @@ app.post('/api/notifications', async (req, res) => {
 
 app.post('/api/notifications/read-all', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.uid;
     if (userId) {
       await Notification.updateMany({ userId, read: false }, { read: true });
     }
@@ -1313,7 +1685,7 @@ app.post('/api/notifications/read-all', async (req, res) => {
 
 app.post('/api/notifications/:id/read', async (req, res) => {
   try {
-    await Notification.findByIdAndUpdate(req.params.id, { read: true });
+    await Notification.findOneAndUpdate({ _id: req.params.id, userId: req.user.uid }, { read: true });
     res.json({ message: 'Marked as read' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1322,7 +1694,7 @@ app.post('/api/notifications/:id/read', async (req, res) => {
 
 app.delete('/api/notifications', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.uid;
     if (userId) {
       await Notification.deleteMany({ userId });
     }
@@ -1334,7 +1706,7 @@ app.delete('/api/notifications', async (req, res) => {
 
 app.delete('/api/notifications/:id', async (req, res) => {
   try {
-    await Notification.findByIdAndDelete(req.params.id);
+    await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user.uid });
     res.json({ message: 'Notification deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1414,9 +1786,10 @@ app.get('*', (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Backend server running on http://localhost:${PORT}`);
+  });
+}
 
-// Export app for serverless deployment (Vercel)
 export default app;

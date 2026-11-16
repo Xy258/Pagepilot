@@ -35,47 +35,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const loadAuth = async () => {
-      setLoading(true);
-      const storedUid = localStorage.getItem('artisan_user_id');
-      const isLoggedOut = localStorage.getItem('mock_logged_out');
-      if (isLoggedOut === 'true' || !storedUid) {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-      try {
-        const currentUser = await api.auth.me();
+    let active = true;
+    api.auth.me()
+      .then((currentUser) => {
+        if (!active) return;
         setUser(currentUser);
         setProfile(currentUser);
-      } catch {
-        localStorage.removeItem('artisan_user_id');
+      })
+      .catch(() => {
+        if (!active) return;
         setUser(null);
         setProfile(null);
-      }
-      setLoading(false);
-    };
-    loadAuth();
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
   }, []);
 
-  const storeUid = (u: any) => {
-    if (u?.uid) localStorage.setItem('artisan_user_id', u.uid);
-  };
-
   const login = async (data: any) => {
-    localStorage.removeItem('mock_logged_out');
     const currentUser = await api.auth.login(data);
-    storeUid(currentUser);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;
   };
 
   const register = async (data: any) => {
-    localStorage.removeItem('mock_logged_out');
-    const currentUser = await api.auth.login(data);
-    storeUid(currentUser);
+    const currentUser = await api.auth.register(data);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;
@@ -85,19 +71,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Guest login removed — users must sign in with a real account
   };
 
-  const loginWithGoogle = async (authCode: string, role?: string) => {
-    localStorage.removeItem('mock_logged_out');
-    const currentUser = await api.auth.loginWithGoogle(authCode, role);
-    storeUid(currentUser);
+  const loginWithGoogle = async (authCode: string) => {
+    const currentUser = await api.auth.loginWithGoogle(authCode);
     setUser(currentUser);
     setProfile(currentUser);
     return currentUser;
   };
 
   const logout = async () => {
-    localStorage.setItem('mock_logged_out', 'true');
-    setUser(null);
-    setProfile(null);
+    try {
+      await api.auth.logout();
+    } finally {
+      setUser(null);
+      setProfile(null);
+    }
   };
 
   return (

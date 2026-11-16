@@ -26,18 +26,8 @@ npm run build
 ```
 
 #### 3. **Environment Variables Not Set**
-Go to Vercel Dashboard → Project Settings → Environment Variables
-Add these:
-```
-VITE_API_BASE_URL = https://your-backend.railway.app/api
-VITE_GEMINI_API_KEY = (your key)
-VITE_OPENAI_API_KEY = (your key)
-VITE_GROQ_API_KEY = (your key)
-VITE_UNSPLASH_ACCESS_KEY = (your key)
-VITE_PEXELS_API_KEY = (your key)
-VITE_VIDEO_AUDIO_API_KEY = (your key)
-VITE_ELEVENLABS_API_KEY = (your key)
-VITE_PIXABAY_API_KEY = (your key)
+Set `VITE_API_BASE_URL` in the frontend deployment to the backend origin plus `/api`.
+Set database and provider credentials only in the backend host's server-side environment; never expose them with a `VITE_` prefix.
 ```
 
 #### 4. **Node Version Mismatch**

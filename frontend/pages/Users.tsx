@@ -697,7 +697,7 @@ export default function Users() {
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400 dark:text-stone-500 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/40 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-all font-bold shadow-sm border border-stone-200/50 dark:border-stone-800 overflow-hidden relative">
                       {user.avatarUrl ? <img src={user.avatarUrl} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : (user.displayName?.charAt(0) || user.email?.charAt(0))}
-                      {['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(user.email) && (
+                      {user.role === 'admin' && (
                         <div className="absolute inset-0 bg-stone-900/10 flex items-center justify-center">
                           <Activity size={12} className="text-emerald-600 animate-pulse" />
                         </div>
@@ -706,7 +706,7 @@ export default function Users() {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-bold text-stone-900 dark:text-white tracking-tight">{user.displayName || 'Anonymous Artisan'}</p>
-                        {['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(user.email) && (
+                        {user.role === 'admin' && (
                           <span className="text-[8px] font-black bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 px-1.5 py-0.5 rounded uppercase tracking-widest shadow-lg shadow-stone-900/20">Founder</span>
                         )}
                       </div>
@@ -831,7 +831,7 @@ export default function Users() {
                    <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-stone-900 dark:text-white tracking-tight">{user.displayName || 'Anonymous'}</p>
-                      {['pc0050272005@gmail.com', 'ravikumar888452@gmail.com', 'ullasmahesh21@gmail.com'].includes(user.email) && (
+                      {user.role === 'admin' && (
                         <span className="text-[8px] font-black bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 px-1.5 py-0.5 rounded uppercase tracking-widest shadow-sm">Founder</span>
                       )}
                       {user.jobTitle && (

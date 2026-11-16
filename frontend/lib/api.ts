@@ -1,3 +1,5 @@
+import { upload as uploadBlob } from '@vercel/blob/client';
+
 // API client connecting to the backend.
 // It automatically prefixes every endpoint with the base URL.
 // The base URL is taken from the VITE_API_BASE_URL env variable (set in .env files).
@@ -12,7 +14,6 @@ const API_BASE_URL = (((import.meta as any).env?.VITE_API_BASE_URL as string)?.t
  * @param options Fetch init options
  */
 export async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
-  const uid = localStorage.getItem('artisan_user_id') || '';
   const normalizedEndpoint = endpoint.replace(/^\/+/, "");
   const url = `${API_BASE_URL}/${normalizedEndpoint}`;
 
@@ -20,9 +21,8 @@ export async function request(endpoint: string, options: RequestInit = {}): Prom
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-  if (uid) headers['x-user-id'] = uid;
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers, credentials: 'include' });
 
   if (!response.ok) {
     let body = "";
@@ -32,18 +32,7 @@ export async function request(endpoint: string, options: RequestInit = {}): Prom
   return response.json();
 }
 
-// -------------------------------------------------------------------
-// Mock user – used for local dev when no real auth is set up.
-// -------------------------------------------------------------------
-const mockUser = {
-  uid: 'local-user-id',
-  email: 'local@artisan.workshop',
-  displayName: 'Local Artisan',
-  role: 'admin',
-  avatarUrl: ''
-};
-
-export const auth = { currentUser: mockUser };
+export const auth = { currentUser: null };
 export const db = {};
 export function normalizeData(data: any): any { return data; }
 
@@ -51,16 +40,10 @@ export const api = {
   // Auth
   auth: {
     me: async () => request('/auth/me'),
-    login: async (data: any) => {
-      const user = await request('/auth/login', { method: 'POST', body: JSON.stringify(data) });
-      localStorage.setItem('artisan_user_id', user.uid);
-      return user;
-    },
-    loginWithGoogle: async (authCode: string, role?: string) => {
-      const user = await request('/auth/google', { method: 'POST', body: JSON.stringify({ code: authCode, role }) });
-      localStorage.setItem('artisan_user_id', user.uid);
-      return user;
-    }
+    login: async (data: any) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+    register: async (data: any) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    logout: async () => request('/auth/logout', { method: 'POST' }),
+    loginWithGoogle: async (authCode: string) => request('/auth/google', { method: 'POST', body: JSON.stringify({ code: authCode }) })
   },
   // AI helpers (unchanged)
   ai: {
@@ -87,18 +70,36 @@ export const api = {
     list: async () => request('/media'),
     update: async (id: string, data: any) => request(`/media/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     upload: async (file: File) => {
-      const uid = localStorage.getItem('artisan_user_id') || mockUser.uid;
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>(resolve => { reader.onload = () => resolve(reader.result as string); reader.readAsDataURL(file); });
-      const fileNameLower = file.name.toLowerCase();
-      const isAudioExt = fileNameLower.endsWith('.mp3') || fileNameLower.endsWith('.wav') || fileNameLower.endsWith('.m4a') || fileNameLower.endsWith('.ogg') || fileNameLower.endsWith('.aac');
-      const isVideoExt = fileNameLower.endsWith('.mp4') || fileNameLower.endsWith('.webm') || fileNameLower.endsWith('.mov');
-      let detectedType = 'other';
-      if (file.type.startsWith('image/')) detectedType = 'image';
-      else if (isAudioExt || file.type.startsWith('audio/')) detectedType = 'audio';
-      else if (isVideoExt || file.type.startsWith('video/')) detectedType = 'video';
-      else if (file.type.includes('pdf') || file.type.includes('epub') || fileNameLower.endsWith('.pdf')) detectedType = 'ebook';
-      return request('/media', { method: 'POST', body: JSON.stringify({ name: file.name, type: detectedType, url: dataUrl, size: (file.size / 1024).toFixed(1) + ' KB', sizeBytes: file.size, ownerId: uid }) });
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const extensionTypes: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+        mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ogg: 'audio/ogg', aac: 'audio/aac',
+        mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', pdf: 'application/pdf', epub: 'application/epub+zip'
+      };
+      const mediaTypes: Record<string, string> = {
+        'image/jpeg': 'image', 'image/png': 'image', 'image/webp': 'image', 'image/gif': 'image',
+        'audio/mpeg': 'audio', 'audio/mp4': 'audio', 'audio/wav': 'audio', 'audio/x-wav': 'audio', 'audio/ogg': 'audio', 'audio/aac': 'audio',
+        'video/mp4': 'video', 'video/webm': 'video', 'video/quicktime': 'video',
+        'application/pdf': 'ebook', 'application/epub+zip': 'ebook'
+      };
+      const contentType = mediaTypes[file.type] ? file.type : extensionTypes[extension];
+      if (!contentType || !mediaTypes[contentType]) throw new Error('Unsupported media type.');
+      if (!file.size || file.size > 8 * 1024 * 1024) throw new Error('Media uploads must be 8 MB or smaller.');
+
+      const currentUser = await request('/auth/me');
+      const mediaId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      const name = file.name.replaceAll('/', '_').replaceAll(String.fromCharCode(92), '_').replace(/[\x00-\x1f\x7f]/g, '_').slice(0, 180) || 'upload';
+      const pathname = `users/${encodeURIComponent(currentUser.uid)}/${mediaId}/${name}`;
+      const blob = await uploadBlob(pathname, file, {
+        access: 'private',
+        contentType,
+        handleUploadUrl: `${API_BASE_URL}/media/upload-token`,
+        clientPayload: JSON.stringify({ mediaId, name, contentType, sizeBytes: file.size })
+      });
+      return request('/media/complete', {
+        method: 'POST',
+        body: JSON.stringify({ mediaId, pathname: blob.pathname, name })
+      });
     },
     saveReference: async (data: any) => request('/media', { method: 'POST', body: JSON.stringify(data) }),
     rehost: async (data: { url: string; name?: string }) => request('/proxy-image', { method: 'POST', body: JSON.stringify(data) }),
@@ -161,5 +162,12 @@ export const api = {
   feedback: {
     send: async (data: any) => request('/feedback', { method: 'POST', body: JSON.stringify(data) }),
     list: async () => request('/feedback')
+  },
+  adminLogs: {
+    list: async () => request('/admin-logs'),
+    record: async (action: string, detail: string) => request('/admin-logs', { method: 'POST', body: JSON.stringify({ action, detail }) })
+  },
+  system: {
+    seed: async () => request('/system/seed', { method: 'POST' })
   }
 };
