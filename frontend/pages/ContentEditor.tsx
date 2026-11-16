@@ -71,6 +71,7 @@ export default function ContentEditor() {
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [gallery, setGallery] = useState<any[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -103,6 +104,7 @@ export default function ContentEditor() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   
   const [searchQuery, setSearchQuery] = useState('');
+  const filteredPosts = posts.filter((post) => post.title?.toLowerCase().includes(searchQuery.trim().toLowerCase()));
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
 
   // Modal State
@@ -169,13 +171,15 @@ export default function ContentEditor() {
   const handleCreatePost = async () => {
     const activeUser = user || profile;
     if (!activeUser) {
-      alert('User session not found');
+      setCreateError('Your session could not be found. Sign in again to create an article.');
       return;
     }
+
+    setCreateError('');
     setLoading(true);
     try {
       const newPost = {
-        title: 'Untitled Post',
+        title: 'Untitled Article',
         slug: `untitled-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         content: '',
         status: 'draft',
@@ -189,13 +193,25 @@ export default function ContentEditor() {
         views: 0,
         secondsSpent: 0
       };
-      const createdPost = await api.posts.create(newPost);
-      // Open editor immediately with the created post, refresh list in background
-      handleSelectPost(createdPost);
-      fetchPosts().catch((err) => console.error('Refresh posts failed after create:', err));
-    } catch (err: any) {
+      const response = await api.posts.create(newPost);
+      const createdPost = response?.post ?? response?.article ?? response?.data?.post ?? response?.data?.article ?? response?.data ?? response;
+      const postId = createdPost?._id || createdPost?.id;
+
+      if (!createdPost || typeof createdPost !== 'object' || !postId) {
+        throw new Error('The article was created, but its ID was not returned. Refresh the list and try opening the draft again.');
+      }
+
+      const editorPost = { ...newPost, ...createdPost, _id: String(postId), id: String(postId) };
+      setPosts((currentPosts) => [
+        editorPost,
+        ...currentPosts.filter((post) => String(post._id || post.id) !== String(postId)),
+      ]);
+      handleSelectPost(editorPost);
+      setIsEditing(true);
+      void fetchPosts();
+    } catch (err) {
       console.error('Failed to create post:', err);
-      alert('Failed to create post: ' + err.message);
+      setCreateError('Could not create the article. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -1009,14 +1025,18 @@ export default function ContentEditor() {
         <div className="p-4 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
           <h2 className="font-serif font-bold text-stone-900 dark:text-white">Articles</h2>
           <button 
+            type="button"
             onClick={handleCreatePost}
             disabled={loading}
-            className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
-            title="Create New Post (Ctrl+N)"
+            aria-label="Create a new article"
+            aria-busy={loading}
+            className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            title="Create a new article (Ctrl+N)"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
           </button>
         </div>
+        {createError && <p role="alert" className="mx-4 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">{createError}</p>}
         <div className="p-4">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 text-stone-400 dark:text-stone-600" size={16} />
@@ -1030,7 +1050,19 @@ export default function ContentEditor() {
           </div>
         </div>
         <div className="flex-1 overflow-auto divide-y divide-stone-50 dark:divide-stone-800">
-          {posts.filter(p => p.title?.toLowerCase().includes(searchQuery.toLowerCase())).map((post) => (
+          {filteredPosts.length === 0 ? (
+            <div className="flex min-h-48 h-full flex-col items-center justify-center px-5 py-10 text-center">
+              <FileText aria-hidden="true" size={30} className="mb-3 text-stone-400 dark:text-stone-500" />
+              <p className="text-sm font-semibold text-stone-800 dark:text-stone-200">{searchQuery.trim() ? 'No matching articles' : 'No articles yet'}</p>
+              <p className="mt-1 max-w-56 text-xs leading-relaxed text-stone-600 dark:text-stone-400">{searchQuery.trim() ? 'Try another title search.' : 'Create a draft to open the editor and start writing.'}</p>
+              {!searchQuery.trim() && (
+                <button type="button" onClick={handleCreatePost} disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  Create first article
+                </button>
+              )}
+            </div>
+          ) : filteredPosts.map((post) => (
               <div key={post._id || post.id} onClick={() => handleSelectPost(post)} className={`p-4 cursor-pointer transition-colors group/item ${selectedPost?._id === post._id || selectedPost?.id === post.id ? 'bg-emerald-50 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500' : 'hover:bg-stone-50 dark:hover:bg-stone-800'}`}>
                 <div className="flex justify-between items-start gap-2">
                   <h3 className="text-sm font-bold text-stone-900 dark:text-white line-clamp-1 mb-1 flex-1">{post.title}</h3>
@@ -1753,13 +1785,13 @@ export default function ContentEditor() {
               key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex-1 flex flex-col items-center justify-center p-12 text-center"
+              className="flex-1 min-h-[400px] flex flex-col items-center justify-center p-6 sm:p-12 text-center"
             >
                <div className="w-24 h-24 bg-stone-100 rounded-3xl flex items-center justify-center text-stone-300 mb-8">
                   <FileText size={48} />
                </div>
-               <h1 className="text-3xl font-serif font-bold text-stone-900 mb-4">Start Your Masterpiece</h1>
-               <p className="text-stone-500 max-w-sm mb-10 leading-relaxed italic">Page Pilot is ready for your stories. Select an article to begin editing or create something new.</p>
+               <h1 className="text-3xl font-serif font-bold text-stone-900 dark:text-white mb-4">Choose an article to edit</h1>
+               <p className="text-stone-600 dark:text-stone-400 max-w-sm mb-10 leading-relaxed">Select an article from your list, or create a draft to open the editor.</p>
                <button 
                 onClick={handleCreatePost}
                 disabled={loading}
