@@ -13,6 +13,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { OAuth2Client } from 'google-auth-library';
 import { randomBytes, createHash } from 'crypto';
+import { del, get, head, put } from '@vercel/blob';
+import { handleUpload } from '@vercel/blob/client';
 import { lookup } from 'dns/promises';
 import { BlockList, isIP } from 'net';
 import OpenAI from 'openai';
@@ -54,12 +56,15 @@ const configuredOrigins = (process.env.FRONTEND_URL || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 const allowedOrigins = [...new Set([...configuredOrigins, 'http://localhost:5173', 'http://127.0.0.1:5173'])];
-const isTrustedOrigin = (req) => !req.get('origin') || allowedOrigins.includes(req.get('origin'));
+const isTrustedOrigin = (req) => {
+  const origin = req.get('origin');
+  return !origin || allowedOrigins.includes(origin) || origin === `${req.protocol}://${req.get('host')}`;
+};
 
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Origin is not allowed by CORS'));
+    return callback(null, false);
   },
   credentials: true
 }));
@@ -343,11 +348,7 @@ async function generateServerAudio(prompt) {
 }
 
 const uploadDir = join(dirname(fileURLToPath(import.meta.url)), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
 app.set('trust proxy', 1);
-const getUploadedFileUrl = (req, filename) => `${(process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '')}/uploads/${filename}`;
 app.use('/uploads', express.static(uploadDir));
 
 // Request logging
@@ -358,17 +359,22 @@ app.use((req, res, next) => {
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_CONNECTION_STRING || process.env.MONGODB_URI;
-if (!MONGODB_URI) {
-  console.error('❌ MONGODB_CONNECTION_STRING environment variable is not set.');
+if (!MONGODB_URI && !process.env.VERCEL) {
+  console.error('MONGODB_CONNECTION_STRING environment variable is not set.');
   process.exit(1);
 }
 
-mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 5000 })
-  .then(() => console.log(`✅ Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Atlas'})`))
-  .catch(err => {
-    console.error('❌ MongoDB Connection Error:', err.message);
-    process.exit(1);
-  });
+export const databaseConnection = MONGODB_URI
+  ? mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 5000 }).then(() => {
+      console.log(`Connected to MongoDB (${MONGODB_URI.includes('mongodb.net') ? 'Atlas Cloud' : 'Atlas'})`);
+      return mongoose.connection;
+    })
+  : Promise.reject(new Error('MONGODB_CONNECTION_STRING environment variable is not set.'));
+
+databaseConnection.catch((error) => {
+  console.error('MongoDB connection failed:', error.message);
+  if (!process.env.VERCEL) process.exit(1);
+});
 
 // Email Transporter - robust init with Ethereal fallback for local development
 let transporter = null;
@@ -539,6 +545,7 @@ const mediaSchema = new mongoose.Schema({
   audioUrl: String,
   size: String,
   sizeBytes: Number,
+  storagePathname: { type: String, unique: true, sparse: true },
   ownerId: String,
   icon: String,
   color: String,
@@ -546,6 +553,50 @@ const mediaSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Media = mongoose.model('Media', mediaSchema);
+
+const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
+const mediaContentTypes = {
+  'image/jpeg': 'image',
+  'image/png': 'image',
+  'image/webp': 'image',
+  'image/gif': 'image',
+  'audio/mpeg': 'audio',
+  'audio/mp4': 'audio',
+  'audio/wav': 'audio',
+  'audio/x-wav': 'audio',
+  'audio/ogg': 'audio',
+  'audio/aac': 'audio',
+  'video/mp4': 'video',
+  'video/webm': 'video',
+  'video/quicktime': 'video',
+  'application/pdf': 'ebook',
+  'application/epub+zip': 'ebook'
+};
+const mediaFileUrl = (mediaId) => `/api/media/file/${mediaId}`;
+
+const sanitizeMediaName = (value) => String(value || 'upload').replace(/[\\/\u0000-\u001f\u007f]/g, '_').slice(0, 180);
+
+async function upsertBlobMedia({ mediaId, pathname, ownerId, name, contentType, sizeBytes }) {
+  const mediaType = mediaContentTypes[contentType];
+  if (!mediaType || !Number.isInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_MEDIA_BYTES) {
+    throw new Error('Unsupported media file.');
+  }
+  return Media.findOneAndUpdate(
+    { _id: mediaId, ownerId },
+    {
+      $set: {
+        name: sanitizeMediaName(name),
+        type: mediaType,
+        sizeBytes,
+        size: `${(sizeBytes / 1024).toFixed(1)} KB`,
+        ownerId,
+        storagePathname: pathname,
+        url: mediaFileUrl(mediaId)
+      }
+    },
+    { upsert: true, new: true, runValidators: true }
+  );
+}
 
 const siteSchema = new mongoose.Schema({
   name: String,
@@ -666,7 +717,18 @@ app.use('/api', async (req, res, next) => {
     }
     const isPublicPublishedList = req.method === 'GET' && req.path === '/posts' && req.query.status === 'published';
     const isPublicView = req.method === 'POST' && /^\/posts\/[^/]+\/view$/.test(req.path);
-    if (isPublicPublishedList || isPublicView) return next();
+    const isMediaFile = req.method === 'GET' && /^\/media\/file\/[a-f0-9]{24}$/i.test(req.path);
+    const isBlobUploadCallback = req.method === 'POST' && req.path === '/media/upload-token' && req.body?.type === 'blob.upload-completed';
+    if (isPublicPublishedList || isPublicView || isBlobUploadCallback) return next();
+    if (isMediaFile) {
+      const tokenValue = req.headers.cookie?.match(/(?:^|;\s*)pagepilot_session=([^;]+)/)?.[1];
+      if (tokenValue) {
+        const token = decodeURIComponent(tokenValue);
+        const session = await Session.findOne({ tokenHash: hashSessionToken(token), expiresAt: { $gt: new Date() } });
+        if (session) req.user = await User.findOne({ uid: session.userId }) || undefined;
+      }
+      return next();
+    }
     if (req.method === 'GET' && /^\/posts\/[^/]+$/.test(req.path)) {
       const publicPost = await Post.findOne({ slug: req.path.slice('/posts/'.length), status: 'published' });
       if (publicPost) return next();
@@ -875,6 +937,124 @@ app.post('/api/posts/:id/time', async (req, res) => {
   }
 });
 
+app.post('/api/media/upload-token', async (req, res) => {
+  try {
+    const result = await handleUpload({
+      body: req.body,
+      request: req,
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        let metadata;
+        try {
+          metadata = JSON.parse(clientPayload || '{}');
+        } catch {
+          throw new Error('Invalid upload metadata.');
+        }
+        const mediaId = String(metadata.mediaId || '');
+        const name = sanitizeMediaName(metadata.name);
+        const contentType = String(metadata.contentType || '').toLowerCase();
+        const ownerPrefix = `users/${encodeURIComponent(req.user.uid)}/${mediaId}/`;
+        if (!/^[a-f0-9]{24}$/i.test(mediaId) || !mediaContentTypes[contentType] ||
+          !Number.isInteger(metadata.sizeBytes) || metadata.sizeBytes < 1 || metadata.sizeBytes > MAX_MEDIA_BYTES ||
+          pathname !== `${ownerPrefix}${name}`) {
+          throw new Error('Upload metadata is not allowed.');
+        }
+        return {
+          allowedContentTypes: [contentType],
+          maximumSizeInBytes: MAX_MEDIA_BYTES,
+          addRandomSuffix: false,
+          tokenPayload: JSON.stringify({ mediaId, ownerId: req.user.uid, name })
+        };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const metadata = JSON.parse(tokenPayload || '{}');
+        const ownerPrefix = `users/${encodeURIComponent(metadata.ownerId || '')}/${metadata.mediaId}/`;
+        if (!metadata.ownerId || !/^[a-f0-9]{24}$/i.test(metadata.mediaId || '') || !blob.pathname.startsWith(ownerPrefix)) {
+          throw new Error('Upload owner verification failed.');
+        }
+        await upsertBlobMedia({
+          mediaId: metadata.mediaId,
+          pathname: blob.pathname,
+          ownerId: metadata.ownerId,
+          name: metadata.name,
+          contentType: blob.contentType,
+          sizeBytes: blob.size
+        });
+      }
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Blob upload authorization failed:', error.message);
+    res.status(400).json({ error: 'Unable to authorize media upload.' });
+  }
+});
+
+app.post('/api/media/complete', async (req, res) => {
+  try {
+    const mediaId = String(req.body.mediaId || '');
+    const pathname = String(req.body.pathname || '');
+    const ownerId = req.user.uid;
+    const ownerPrefix = `users/${encodeURIComponent(ownerId)}/${mediaId}/`;
+    if (!/^[a-f0-9]{24}$/i.test(mediaId) || !pathname.startsWith(ownerPrefix)) {
+      return res.status(403).json({ error: 'Upload does not belong to this account.' });
+    }
+
+    const blob = await head(pathname, { access: 'private' });
+    if (!blob || blob.size > MAX_MEDIA_BYTES || !mediaContentTypes[blob.contentType]) {
+      return res.status(415).json({ error: 'Uploaded media type or size is not supported.' });
+    }
+    const item = await upsertBlobMedia({
+      mediaId,
+      pathname,
+      ownerId,
+      name: req.body.name,
+      contentType: blob.contentType,
+      sizeBytes: blob.size
+    });
+    res.status(201).json(item);
+  } catch (error) {
+    console.error('Blob upload completion failed:', error.message);
+    res.status(400).json({ error: 'Unable to finalize media upload.' });
+  }
+});
+
+app.get('/api/media/file/:id', async (req, res) => {
+  try {
+    const media = await Media.findById(req.params.id);
+    if (!media?.storagePathname) return res.status(404).json({ error: 'File not found.' });
+
+    const isOwner = req.user?.uid === media.ownerId;
+    const isPublished = !isOwner && await Post.exists({
+      status: 'published',
+      $or: [
+        { featuredImage: media.url },
+        { content: { $regex: media._id.toString() } }
+      ]
+    });
+    if (!isOwner && !isPublished) return res.status(404).json({ error: 'File not found.' });
+
+    const blob = await get(media.storagePathname, {
+      access: 'private',
+      ifNoneMatch: req.get('if-none-match') || undefined
+    });
+    if (blob.statusCode === 304) {
+      return res.status(304).set({ ETag: blob.blob.etag, 'Cache-Control': 'private, no-cache' }).end();
+    }
+    const buffer = Buffer.from(await new Response(blob.stream).arrayBuffer());
+    res.set({
+      'Content-Type': blob.blob.contentType,
+      'Content-Length': String(buffer.length),
+      'Content-Disposition': 'inline',
+      'X-Content-Type-Options': 'nosniff',
+      ETag: blob.blob.etag,
+      'Cache-Control': 'private, no-cache'
+    });
+    res.send(buffer);
+  } catch (error) {
+    console.error('Blob file delivery failed:', error.message);
+    res.status(404).json({ error: 'File not found.' });
+  }
+});
+
 app.get('/api/media', async (req, res) => {
   const uid = req.user.uid;
   const media = await Media.find({ ownerId: uid }).sort({ createdAt: -1 });
@@ -883,25 +1063,48 @@ app.get('/api/media', async (req, res) => {
 
 app.post('/api/media', async (req, res) => {
   try {
-    const uid = req.user.uid;
-    let payload = { ...req.body, ownerId: uid };
-    
-    if (typeof payload.url === 'string' && payload.url.startsWith('data:')) {
-      const matches = payload.url.match(/^data:(image\/(?:jpeg|png|webp|gif)|audio\/(?:mpeg|wav|ogg|mp4)|video\/(?:mp4|webm));base64,([A-Za-z0-9+/=]+)$/i);
-      if (!matches) return res.status(415).json({ error: 'Unsupported media type.' });
-      const buffer = Buffer.from(matches[2], 'base64');
-      if (!buffer.length || buffer.length > 8 * 1024 * 1024) return res.status(413).json({ error: 'Media uploads must be 8 MB or smaller.' });
-      const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'video/mp4': 'mp4', 'video/webm': 'webm' };
-      const contentType = matches[1].toLowerCase();
-      const filename = `${Date.now()}-${randomBytes(4).toString('hex')}.${extensions[contentType]}`;
-      fs.writeFileSync(join(uploadDir, filename), buffer, { flag: 'wx' });
-      payload.url = getUploadedFileUrl(req, filename);
+    const ownerId = req.user.uid;
+    const name = sanitizeMediaName(req.body.name);
+    const url = req.body.url;
+    if (typeof url !== 'string' || url.length > 4096) return res.status(400).json({ error: 'A valid media URL is required.' });
+
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:([A-Za-z0-9.+-]+\/[A-Za-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i);
+      const contentType = match?.[1].toLowerCase();
+      if (!match || !mediaContentTypes[contentType]) return res.status(415).json({ error: 'Unsupported media type.' });
+      const buffer = Buffer.from(match[2], 'base64');
+      if (!buffer.length || buffer.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'Inline media must be 3 MB or smaller; use the upload flow for files.' });
+      const mediaId = new mongoose.Types.ObjectId().toString();
+      const pathname = `users/${encodeURIComponent(ownerId)}/${mediaId}/${name}`;
+      await put(pathname, buffer, { access: 'private', contentType, addRandomSuffix: false });
+      const item = await upsertBlobMedia({ mediaId, pathname, ownerId, name, contentType, sizeBytes: buffer.length });
+      return res.status(201).json(item);
     }
-    
-    const item = await Media.create(payload);
-    res.json(item);
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      if (!/^\/api\/media\/file\/[a-f0-9]{24}$/i.test(url)) return res.status(400).json({ error: 'Invalid media URL.' });
+    }
+    if (parsedUrl && !['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return res.status(400).json({ error: 'Media URL must use HTTP or HTTPS.' });
+    }
+
+    const item = await Media.create({
+      name,
+      type: String(req.body.type || 'other'),
+      url,
+      size: String(req.body.size || ''),
+      sizeBytes: Number.isFinite(Number(req.body.sizeBytes)) ? Number(req.body.sizeBytes) : undefined,
+      audioUrl: typeof req.body.audioUrl === 'string' ? req.body.audioUrl : undefined,
+      ownerId,
+      tags: Array.isArray(req.body.tags) ? req.body.tags.slice(0, 30).map((tag) => String(tag).slice(0, 80)) : []
+    });
+    res.status(201).json(item);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Media save failed:', error.message);
+    res.status(500).json({ error: 'Unable to save media.' });
   }
 });
 
@@ -913,8 +1116,10 @@ app.patch('/api/media/:id', async (req, res) => {
 });
 
 app.delete('/api/media/:id', async (req, res) => {
-  const uid = req.user.uid;
-  await Media.findOneAndDelete({ _id: req.params.id, ownerId: uid });
+  const media = await Media.findOne({ _id: req.params.id, ownerId: req.user.uid });
+  if (!media) return res.status(404).json({ error: 'Media item not found.' });
+  if (media.storagePathname) await del(media.storagePathname);
+  await media.deleteOne();
   res.json({ success: true });
 });
 
@@ -1197,22 +1402,19 @@ app.post('/api/proxy-image', async (req, res) => {
     const contentType = (response.headers.get('content-type') || '').split(';')[0].toLowerCase();
     const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
     if (!extensions[contentType]) return res.status(415).json({ error: 'Only JPEG, PNG, WebP, and GIF images are supported.' });
-    const filename = `${Date.now()}-${randomBytes(4).toString('hex')}.${extensions[contentType]}`;
-    const filepath = join(uploadDir, filename);
+    const filename = `${Date.now()}-${randomBytes(8).toString('hex')}.${extensions[contentType]}`;
+    const ownerId = req.user.uid;
+    const mediaId = new mongoose.Types.ObjectId().toString();
+    const pathname = `users/${encodeURIComponent(ownerId)}/${mediaId}/${filename}`;
     const buffer = await readLimitedBody(response);
-    fs.writeFileSync(filepath, buffer);
-
-    const fileUrl = getUploadedFileUrl(req, filename);
-
-    // Create a Media item tied to the requesting user
-    const uid = req.user.uid || 'local-user-id';
-    const item = await Media.create({
+    await put(pathname, buffer, { access: 'private', contentType, addRandomSuffix: false });
+    const item = await upsertBlobMedia({
+      mediaId,
+      pathname,
+      ownerId,
       name: name || filename,
-      type: 'image',
-      url: fileUrl,
-      size: `${Math.round(buffer.length / 1024)} KB`,
-      sizeBytes: buffer.length,
-      ownerId: uid
+      contentType,
+      sizeBytes: buffer.length
     });
 
     res.json(item);
@@ -1584,9 +1786,10 @@ app.get('*', (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Backend server running on http://localhost:${PORT}`);
+  });
+}
 
-// Export app for serverless deployment (Vercel)
 export default app;
