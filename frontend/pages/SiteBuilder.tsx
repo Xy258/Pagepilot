@@ -950,7 +950,7 @@ export default function SiteBuilder() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 md:gap-8 h-[calc(100vh-14rem)] lg:h-[calc(100vh-12rem)] relative overflow-x-hidden md:overflow-x-visible">
+    <div className="flex flex-col lg:flex-row gap-6 md:gap-8 h-[calc(100dvh_-_14rem)] lg:h-[calc(100dvh_-_12rem)] relative overflow-x-hidden md:overflow-x-visible">
       {/* Premium Sticky Mobile Tab Bar */}
       <div className="lg:hidden flex items-center justify-center p-2 bg-stone-100/80 backdrop-blur-md rounded-2xl border border-stone-200/50 sticky top-0 z-40 mx-4 shadow-sm mb-2 w-full">
         <button

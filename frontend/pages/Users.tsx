@@ -57,6 +57,35 @@ export default function Users() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const filteredUsers = users.filter((member) => {
+    const query = searchQuery.trim().toLowerCase();
+    const matchesQuery = !query || member.displayName?.toLowerCase().includes(query) || member.email?.toLowerCase().includes(query);
+    return matchesQuery && (roleFilter === 'all' || member.role === roleFilter);
+  });
+
+  const handleExportUsers = () => {
+    const rows = [
+      ['Name', 'Email', 'Role', 'Joined'],
+      ...filteredUsers.map((member) => [
+        member.displayName || '',
+        member.email || '',
+        member.role || '',
+        member.createdAt ? new Date(member.createdAt).toISOString().slice(0, 10) : '',
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((value) => {
+      const text = String(value);
+      const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+      return `"${safeText.replace(/"/g, '""')}"`;
+    }).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'page-pilot-members.csv';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   // Invite Member Modal State
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -655,16 +684,30 @@ export default function Users() {
            <div className="relative w-full sm:max-w-md">
               <Search className="absolute left-4 top-3 text-stone-300 dark:text-stone-600" size={18} />
               <input 
-                type="text" 
+                type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Find a member by name or email..." 
-                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-emerald-500/5 transition-all outline-none text-stone-900 dark:text-white" 
+                aria-label="Search members by name or email"
+                className="w-full pl-12 pr-4 py-3 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all outline-none text-stone-900 dark:text-white"
               />
            </div>
-           <div className="flex gap-2 w-full sm:w-auto justify-end">
-              <button className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 hover:text-stone-900 dark:hover:text-white transition-colors">Export CSV</button>
-              <button className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-400 dark:text-stone-500 hover:text-stone-900 dark:hover:text-white transition-colors">Filters</button>
+           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                aria-label="Filter members by role"
+                className="min-w-0 flex-1 sm:flex-none bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-4 py-3 text-sm text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              >
+                <option value="all">All roles</option>
+                <option value="admin">Admin</option>
+                <option value="editor">Editor</option>
+                <option value="author">Author</option>
+                <option value="viewer">Viewer</option>
+              </select>
+              <button type="button" onClick={handleExportUsers} disabled={filteredUsers.length === 0} className="px-4 py-3 rounded-xl bg-stone-900 dark:bg-emerald-600 text-white text-sm font-semibold hover:bg-stone-800 dark:hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                Export CSV
+              </button>
            </div>
         </div>
 
@@ -681,7 +724,7 @@ export default function Users() {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-50 dark:divide-stone-850/60">
-            {users.filter(u => u.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) || u.email?.toLowerCase().includes(searchQuery.toLowerCase())).map((user) => {
+{filteredUsers.map((user) => {
               const lastLoginDate = user.lastLogin ? new Date(user.lastLogin) : null;
               const profileId = profile?._id || profile?.id || profile?.uid;
               const userId = user?._id || user?.id || user?.uid;
@@ -690,13 +733,14 @@ export default function Users() {
               // Active if login in last 10 mins OR if it's the current user
               const isActive = isCurrentUser || 
                                (lastLoginDate && (lastLoginDate.getTime() > Date.now() - 10 * 60 * 1000));
+              const isEmailVerified = user.emailVerified ?? user.verified ?? null;
 
               return (
               <tr key={user._id || user.id} className="hover:bg-stone-50/50 dark:hover:bg-stone-850/15 transition-colors group">
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400 dark:text-stone-500 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/40 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-all font-bold shadow-sm border border-stone-200/50 dark:border-stone-800 overflow-hidden relative">
-                      {user.avatarUrl ? <img src={user.avatarUrl} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : (user.displayName?.charAt(0) || user.email?.charAt(0))}
+{user.avatarUrl ? <img src={user.avatarUrl} referrerPolicy="no-referrer" alt={`${user.displayName || user.email} avatar`} className="w-full h-full object-cover" /> : (user.displayName?.charAt(0) || user.email?.charAt(0))}
                       {user.role === 'admin' && (
                         <div className="absolute inset-0 bg-stone-900/10 flex items-center justify-center">
                           <Activity size={12} className="text-emerald-600 animate-pulse" />
@@ -754,7 +798,7 @@ export default function Users() {
                         <span className={`text-[10px] font-bold uppercase tracking-widest ${
                           isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-stone-400 dark:text-stone-500'
                         }`}>
-                          {isActive ? 'Active Now' : 'Offline'}
+                          {isActive ? 'Active now' : user.lastLogin ? 'Inactive' : 'No activity yet'}
                         </span>
                         <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
                           {isActive ? 'Current Session' : user.lastLogin ? (
@@ -772,7 +816,7 @@ export default function Users() {
                 </td>
                 <td className="px-8 py-6">
                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-lg uppercase tracking-[0.14em] border border-emerald-100/50 dark:border-emerald-900/30 font-display">
-                     Verified
+                     {isEmailVerified === true ? 'Verified' : isEmailVerified === false ? 'Unverified' : 'Not available'}
                    </span>
                 </td>
                 <td className="px-8 py-6 text-right">
@@ -808,15 +852,19 @@ export default function Users() {
             </tbody>
            </table>
            {fetching && (
-             <div className="p-20 flex items-center justify-center text-stone-300 dark:text-stone-700 bg-white dark:bg-stone-900">
+             <div className="p-20 flex items-center justify-center text-stone-400 dark:text-stone-500 bg-white dark:bg-stone-900" role="status" aria-label="Loading members">
                <Loader2 size={32} className="animate-spin" />
              </div>
+           )}
+           {!fetching && filteredUsers.length === 0 && (
+             <p className="px-6 py-10 text-center text-sm text-stone-600 dark:text-stone-400">No members match those filters. Try another search or role.</p>
            )}
          </div>
  
          {/* Mobile Card View */}
          <div className="lg:hidden p-4 space-y-4">
-           {users.filter(u => u.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) || u.email?.toLowerCase().includes(searchQuery.toLowerCase())).map((user) => {
+           {!fetching && filteredUsers.length === 0 && <p className="py-10 text-center text-sm text-stone-600 dark:text-stone-400">No members match those filters. Try another search or role.</p>}
+           {filteredUsers.map((user) => {
              const lastLoginDate = user.lastLogin ? new Date(user.lastLogin) : null;
              const isActive = (profile?.uid === (user._id || user.id)) || 
                               (lastLoginDate && (lastLoginDate.getTime() > Date.now() - 10 * 60 * 1000));
@@ -826,7 +874,7 @@ export default function Users() {
                <div className="flex items-center justify-between">
                  <div className="flex items-center gap-3">
                    <div className="w-10 h-10 rounded-xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-stone-400 dark:text-stone-500 font-bold shadow-sm border border-stone-200/50 dark:border-stone-800 overflow-hidden">
-                     {user.avatarUrl ? <img src={user.avatarUrl} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : (user.displayName?.charAt(0) || user.email?.charAt(0))}
+                     {user.avatarUrl ? <img src={user.avatarUrl} referrerPolicy="no-referrer" alt={`${user.displayName || user.email} avatar`} className="w-full h-full object-cover" /> : (user.displayName?.charAt(0) || user.email?.charAt(0))}
                    </div>
                    <div>
                     <div className="flex items-center gap-2">
@@ -846,14 +894,18 @@ export default function Users() {
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => handleEditUser(user)}
-                    className="p-2 text-stone-300 dark:text-stone-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    type="button"
+                    aria-label={`Edit ${user.displayName || user.email}`}
+                    className="p-2.5 text-stone-500 dark:text-stone-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     <Edit2 size={16} />
                   </button>
                   {(profile?._id !== (user._id || user.id)) && (
                     <button 
                       onClick={() => initiateDelete(user)}
-                      className="p-2 text-stone-300 dark:text-stone-600 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                      type="button"
+                      aria-label={`Delete ${user.displayName || user.email}`}
+                      className="p-2.5 text-stone-500 dark:text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -873,7 +925,7 @@ export default function Users() {
                     isActive ? 'bg-emerald-500 animate-pulse' : 'bg-stone-300 dark:bg-stone-750'
                   }`} />
                   <span className="text-[9px] font-bold uppercase tracking-widest leading-none">
-                    {isActive ? 'Active Now' : 'Offline'}
+                    {isActive ? 'Active now' : user.lastLogin ? 'Inactive' : 'No activity yet'}
                   </span>
                 </div>
               </div>

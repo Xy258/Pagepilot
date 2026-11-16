@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, X, Check, Trash2, ExternalLink, Info, Sparkles, ShoppingBag, Gift } from 'lucide-react';
+import { Bell, X, Check, Trash2, Info, Sparkles, ShoppingBag, Gift } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { NotificationType } from '../services/notificationService';
 import { Link } from 'react-router-dom';
@@ -57,8 +57,13 @@ export default function NotificationDropdown() {
   return (
     <div className="relative">
       <button 
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`transition-all relative p-2.5 rounded-xl ${isOpen ? 'bg-emerald-50 text-emerald-600' : 'text-stone-400 hover:text-emerald-900 hover:bg-stone-50'}`}
+        aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        aria-controls="notifications-panel"
+        className={`transition-all relative p-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${isOpen ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : 'text-stone-500 dark:text-stone-300 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-stone-50 dark:hover:bg-stone-800'}`}
       >
         <Bell size={20} />
         <AnimatePresence>
@@ -89,9 +94,12 @@ export default function NotificationDropdown() {
               initial={{ opacity: 0, y: 10, scale: 0.95, filter: 'blur(10px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: 10, scale: 0.95, filter: 'blur(10px)' }}
-              className="absolute right-0 mt-3 w-80 md:w-[28rem] bg-stone-900/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-white/10 z-50 overflow-hidden"
+              id="notifications-panel"
+              role="dialog"
+              aria-label="Notifications"
+              className="absolute right-0 mt-3 w-[min(28rem,calc(100vw_-_2rem))] max-h-[calc(100dvh-6rem)] bg-stone-900/95 backdrop-blur-2xl rounded-3xl sm:rounded-[2rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-white/10 z-50 overflow-hidden"
             >
-              <div className="p-8 border-b border-white/5 flex items-center justify-between">
+              <div className="p-5 sm:p-8 border-b border-white/5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                    <h3 className="text-xs font-black text-white uppercase tracking-[0.3em] font-serif">Notifications</h3>
                    <AnimatePresence>
@@ -107,16 +115,18 @@ export default function NotificationDropdown() {
                    </AnimatePresence>
                 </div>
                 {notifications.length > 0 && (
-                  <div className="flex gap-6">
+                  <div className="flex gap-3 sm:gap-5">
                     <button 
+                      type="button"
                       onClick={handleMarkAllAsRead}
-                      className="text-[9px] font-black text-stone-500 hover:text-white transition-colors uppercase tracking-[0.2em]"
+                      className="text-[9px] font-bold text-stone-400 hover:text-white transition-colors"
                     >
-                      Sweep All
+                      Mark all read
                     </button>
                     <button 
+                      type="button"
                       onClick={handleClearAll}
-                      className="text-[9px] font-black text-stone-500 hover:text-stone-400 transition-colors uppercase tracking-[0.2em]"
+                      className="text-[9px] font-bold text-stone-400 hover:text-white transition-colors"
                     >
                       Clear
                     </button>
@@ -124,20 +134,20 @@ export default function NotificationDropdown() {
                 )}
               </div>
 
-              <div className="max-h-[440px] overflow-y-auto no-scrollbar">
+              <div className="max-h-[min(440px,calc(100dvh_-_15rem))] overflow-y-auto no-scrollbar">
                 {notifications.length > 0 ? (
                   <div className="divide-y divide-white/5">
                     {notifications.map((n) => (
                       <div 
                         key={n._id || n.id}
-                        className={`p-6 group transition-all relative ${!n.read ? 'bg-white/5' : 'hover:bg-white/5'}`}
+                        className={`p-4 sm:p-6 group transition-all relative ${!n.read ? 'bg-white/5' : 'hover:bg-white/5'}`}
                       >
-                         <div className="flex gap-5">
+                         <div className="flex gap-3 sm:gap-5">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500 ${!n.read ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-stone-800/50 border-white/5 grayscale group-hover:grayscale-0 group-hover:bg-stone-800'}`}>
                               {getIcon(n.type)}
                             </div>
                             <div className="flex-1 min-w-0">
-                               <div className="flex items-start justify-between gap-2 mb-1.5">
+                               <div className="flex items-start justify-between gap-2 mb-1.5 pr-16 sm:pr-0">
                                   <h4 className={`text-sm leading-tight truncate ${!n.read ? 'font-black text-white' : 'font-bold text-stone-400 group-hover:text-stone-200'}`}>
                                     {n.title}
                                   </h4>
@@ -151,11 +161,13 @@ export default function NotificationDropdown() {
                             </div>
                          </div>
                          
-                         <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 flex gap-1.5">
+                         <div className="absolute top-4 right-4 sm:top-6 sm:right-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-all flex gap-1.5">
                             {!n.read && (
                               <button 
                                 onClick={(e) => handleMarkAsRead(e, n._id || n.id || '')}
                                 className="p-2 bg-stone-800 border border-white/10 rounded-xl text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all shadow-xl active:scale-90"
+                                type="button"
+                                aria-label={`Mark ${n.title} as read`}
                                 title="Mark as read"
                               >
                                 <Check size={12} />
@@ -164,6 +176,8 @@ export default function NotificationDropdown() {
                             <button 
                               onClick={(e) => handleDelete(e, n._id || n.id || '')}
                               className="p-2 bg-stone-800 border border-white/10 rounded-xl text-stone-500 hover:bg-rose-500 hover:text-white transition-all shadow-xl active:scale-90"
+                              type="button"
+                              aria-label={`Delete ${n.title}`}
                               title="Delete"
                             >
                               <Trash2 size={12} />
@@ -173,7 +187,7 @@ export default function NotificationDropdown() {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-20 text-center space-y-4">
+                  <div className="p-10 sm:p-20 text-center space-y-4">
                     <motion.div 
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -181,16 +195,16 @@ export default function NotificationDropdown() {
                     >
                       <Bell size={32} strokeWidth={1} />
                     </motion.div>
-                    <h3 className="text-xs font-black text-white uppercase tracking-[0.3em]">Zen State</h3>
-                    <p className="text-[11px] text-stone-500 font-medium leading-relaxed max-w-[15rem] mx-auto italic">Your workshop is currently in a state of perfect harmony. No disturbances detected.</p>
+                    <h3 className="text-sm font-bold text-white">You&apos;re all caught up</h3>
+                    <p className="text-[11px] text-stone-400 font-medium leading-relaxed max-w-[15rem] mx-auto">New activity will appear here.</p>
                   </div>
                 )}
               </div>
 
-              <div className="p-6 bg-white/5 border-t border-white/5 text-center">
-                <button className="text-[9px] font-black text-stone-500 hover:text-white uppercase tracking-[0.3em] transition-colors font-display">
-                  System Preferences
-                </button>
+              <div className="p-4 bg-white/5 border-t border-white/5 text-center">
+                <Link to="/settings" onClick={() => setIsOpen(false)} className="text-xs font-semibold text-stone-300 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded">
+                  Notification settings
+                </Link>
               </div>
             </motion.div>
           </>

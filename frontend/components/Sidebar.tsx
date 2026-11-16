@@ -26,7 +26,6 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
   const { profile } = useAuth();
   const role = profile?.role || 'author';
-  const cloudOnline = false;
 
   const installedPlugins = profile?.plugins || [];
   
@@ -57,7 +56,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const filteredItems = navItems.filter(item => item.roles.includes(role));
 
   return (
-    <aside className="w-full lg:w-72 h-full bg-stone-950 text-stone-400 flex flex-col shrink-0 relative">
+    <aside aria-label="Workspace navigation" className="w-full lg:w-72 h-full bg-stone-950 text-stone-400 flex flex-col shrink-0 relative">
       {/* Texture Overlay */}
       <div className="absolute inset-0 opacity-[0.05] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
       
@@ -68,20 +67,22 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-black text-white tracking-tighter block leading-none group-hover:text-emerald-400 transition-colors uppercase">Page Pilot</span>
-            <span className="text-[8px] font-bold text-stone-600 uppercase tracking-[0.4em] mt-1 block group-hover:text-stone-400 transition-colors">Workspace Portfolio</span>
+            <span className="text-[8px] font-bold text-stone-500 uppercase tracking-[0.3em] mt-1 block group-hover:text-stone-300 transition-colors">Content workspace</span>
           </div>
         </Link>
         <button 
+          type="button"
           onClick={onClose}
-          className="lg:hidden p-2 text-stone-500 hover:text-white bg-stone-900 rounded-xl transition-all active:scale-90"
+          aria-label="Close navigation menu"
+          className="lg:hidden p-2.5 text-stone-300 hover:text-white bg-stone-900 rounded-xl transition-all active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
         >
           <X size={20} />
         </button>
       </div>
 
-      <nav className="flex-1 px-5 mt-8 space-y-1 relative z-10 overflow-y-auto no-scrollbar">
+      <nav aria-label="Main navigation" className="flex-1 px-5 mt-6 sm:mt-8 space-y-1 relative z-10 overflow-y-auto no-scrollbar">
         <div className="px-4 mb-4">
-          <p className="text-[10px] font-black text-stone-700 uppercase tracking-[0.2em] flex items-center gap-2">
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-[0.15em] flex items-center gap-2">
             Workspace
           </p>
         </div>
@@ -93,6 +94,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
               key={item.path}
               to={item.path}
               onClick={onClose}
+              aria-current={isActive ? 'page' : undefined}
               className={`flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all group relative overflow-hidden ${
                 isActive 
                   ? 'text-white' 
@@ -115,45 +117,23 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         })}
 
         <div className="pt-8 px-4 mb-4">
-          <p className="text-[10px] font-black text-stone-700 uppercase tracking-[0.2em] flex items-center gap-2">
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-[0.15em] flex items-center gap-2">
             Resources
           </p>
         </div>
         <a 
           href="/blog" 
           target="_blank"
-          className="flex items-center gap-3.5 px-4 py-3 rounded-xl text-stone-500 hover:text-stone-200 hover:bg-stone-900/50 transition-all font-medium text-[13px]"
+          rel="noopener noreferrer"
+          aria-label="Read the Page Pilot blog (opens in a new tab)"
+          className="flex items-center gap-3.5 px-4 py-3 rounded-xl text-stone-400 hover:text-stone-100 hover:bg-stone-900/50 transition-all font-medium text-[13px] group"
         >
-          <Shapes size={18} className="text-stone-700" />
+          <Shapes aria-hidden="true" size={18} className="text-stone-400" />
           <span>Blog</span>
           <ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
         </a>
       </nav>
 
-      <div className="p-6 mt-auto relative z-10">
-        <div className="bg-stone-900/50 rounded-2xl p-5 border border-stone-900 relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.1em]">Cloud Status</p>
-            <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${cloudOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'}`}></div>
-              <span className={`text-[9px] font-bold uppercase tracking-tighter ${cloudOnline ? 'text-emerald-400' : 'text-rose-500'}`}>
-                {cloudOnline ? 'Operational' : 'Not Operational'}
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1">
-             <div className="h-1 w-full bg-stone-800 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: cloudOnline ? "82%" : "1%" }}
-                  transition={{ duration: 1.2, ease: "easeOut" }}
-                  className={`h-full ${cloudOnline ? 'bg-emerald-500/60' : 'bg-rose-500/50'}`}
-                />
-             </div>
-             <p className="text-[9px] text-stone-600 font-bold uppercase tracking-widest mt-1">{cloudOnline ? 'All Systems Normal' : 'Service Unreachable'}</p>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }

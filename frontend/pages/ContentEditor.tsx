@@ -1305,7 +1305,7 @@ export default function ContentEditor() {
 
             <div className="flex-1 flex flex-col xl:flex-row gap-6 min-h-0 pb-12">
                 <div className="flex-1 flex flex-col gap-6">
-                  <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm flex flex-col relative h-[600px] lg:flex-1 min-h-0 overflow-hidden">
+                  <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm flex flex-col relative h-[min(600px,65dvh)] sm:h-[600px] lg:flex-1 min-h-0 overflow-hidden">
                   <div className="p-2 border-b border-stone-100 flex items-center gap-1 text-stone-400 overflow-x-auto no-scrollbar bg-stone-50/30">
                     <div className="flex items-center gap-1.5 px-3 shrink-0">
                       <button 

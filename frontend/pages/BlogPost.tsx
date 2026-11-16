@@ -189,7 +189,7 @@ export default function BlogPost() {
             </span>
           </div>
           
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-serif font-black text-stone-900 dark:text-white leading-[1.02] mb-12 tracking-tighter transition-colors">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif font-black text-stone-900 dark:text-white leading-[1.08] mb-8 md:mb-12 tracking-tight transition-colors">
             {post.title}
           </h1>
 
